@@ -45,7 +45,7 @@ st.markdown(
         font-size: 14px !important;
     }
     [data-testid="stSidebar"] a:hover {
-        color: #00FF00 !important; /* Flash green on hover */
+        color: #00FF00 !important;
     }
 
     /* --- MENU CARD STYLING --- */
@@ -70,7 +70,6 @@ st.markdown(
         font-size: 13px !important;
     }
     
-    /* Construction Tag Styling */
     .construction-tag {
         color: #FF4500 !important; 
         font-size: 11px !important;
@@ -83,7 +82,6 @@ st.markdown(
         background-color: rgba(255, 69, 0, 0.1);
     }
 
-    /* Adjust dividers */
     hr {
         border: 0;
         border-top: 1px solid #333333 !important;
@@ -98,7 +96,6 @@ with st.sidebar:
     st.markdown("### ⚡ TERMINAL INDEX")
     st.markdown("---")
     
-    # Note: For these st.page_link commands to work, the files MUST exist in your directory.
     st.page_link("0-home.py", label="[01] Home: Switchboard")
     st.page_link("pages/1-market-heatmap.py", label="[02] Market Heatmap")
     st.page_link("pages/2-macro-bonds.py", label="[03] Macro Bond Watch")
@@ -176,4 +173,45 @@ with col2:
 
     st.markdown("""
         <div class="menu-card">
-            <h4>
+            <h4>[09] Positioning</h4>
+            <p>The structural "bodies buried." COT reports and dealer gamma exposure.</p>
+            <span class="construction-tag">🚧 OFFLINE // UNDER CONSTRUCTION</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown("### CMDTYS & DERIVATIVES")
+    st.markdown("""
+        <div class="menu-card">
+            <h4>[05] Metals</h4>
+            <p>The growth/fear barometer. Gold, Silver, Copper, and Platinum groups.</p>
+            <span class="construction-tag">🚧 OFFLINE // UNDER CONSTRUCTION</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div class="menu-card">
+            <h4>[06] Energy</h4>
+            <p>The global input cost. Crude, Natural Gas, and refined products.</p>
+            <span class="construction-tag">🚧 OFFLINE // UNDER CONSTRUCTION</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div class="menu-card">
+            <h4>[10] Options Flow</h4>
+            <p>The real-time "Whale" tape. Sweeps, blocks, and unusual activity.</p>
+            <span class="construction-tag">🚧 OFFLINE // UNDER CONSTRUCTION</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div class="menu-card">
+            <h4>[11] Options Analyzer</h4>
+            <p>The Black-Scholes engine. Volatility surfaces and Greeks calculator.</p>
+            <span class="construction-tag">🚧 OFFLINE // UNDER CONSTRUCTION</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+st.markdown("*SYSTEM STATUS: PARTIAL UPLINK. CORE MODULES ONLINE.*")

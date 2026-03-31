@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from theme import inject_custom_css
 
 # --- 1. PAGE CONFIG ---
@@ -12,9 +12,9 @@ inject_custom_css()
 @st.cache_data(ttl=600)
 def get_header_data():
     tickers = ["SPY", "QQQ", "IWM", "BTC-USD", "^VIX"]
-    # Download data
     data = yf.download(tickers, period="2y", progress=False)['Close']
     
+    # Current values
     curr = data.iloc[-1]
     prev_1d = data.iloc[-2]
     prev_1w = data.iloc[-6]
@@ -24,7 +24,7 @@ def get_header_data():
     ytd_data = data.loc[data.index >= pd.to_datetime(year_start)]
     start_ytd = ytd_data.iloc[0] if not ytd_data.empty else curr
     
-    # YoY Calculation (approx 252 trading days)
+    # YoY Calculation
     yoy_idx = -252 if len(data) >= 252 else 0
     start_yoy = data.iloc[yoy_idx]
     
@@ -33,11 +33,7 @@ def get_header_data():
         "ytd": start_ytd, "yoy": start_yoy
     }
 
-try:
-    h_data = get_header_data()
-except Exception:
-    st.error("📡 Connection Interrupted. Header data offline.")
-    st.stop()
+h_data = get_header_data()
 
 # --- 3. HEADER SECTION ---
 col_t1, col_t2 = st.columns([2, 1])
@@ -46,9 +42,9 @@ with col_t1:
 with col_t2:
     vix_val = h_data['curr']['^VIX']
     vix_pct = ((vix_val - h_data['prev_1d']['^VIX']) / h_data['prev_1d']['^VIX']) * 100
-    implied_move = 72 / vix_val 
+    implied_move = 72 / vix_val # User's requested formula
     st.metric("VIX SQUEEZE", f"{vix_val:.2f}", f"{vix_pct:.2f}%")
-    st.markdown(f"<span style='color:#FFB100; font-size:12px;'>72/VIX Implied 1D Move: {implied_move:.2f}%</span>", unsafe_allow_html=True)
+    st.markdown(f"<span style='color:#FFB100; font-size:12px;'>72/VIX Implied: {implied_move:.2f}%</span>", unsafe_allow_html=True)
 
 # Ticker Ribbon
 st.markdown("---")
@@ -62,6 +58,7 @@ def fmt_perf(curr, base):
 with c1:
     st.markdown("**THE BIG THREE**")
     for t in ["SPY", "QQQ", "IWM"]:
+        p = ((h_data['curr'][t] - h_data['prev_1d'][t]) / h_data['prev_1d'][t]) * 100
         st.markdown(f"{t}: ${h_data['curr'][t]:.2f} ({fmt_perf(h_data['curr'][t], h_data['prev_1d'][t])})", unsafe_allow_html=True)
 
 with c2:
@@ -82,27 +79,7 @@ with c4:
 
 st.markdown("---")
 
-# --- 4. SIDEBAR INDEX ---
-with st.sidebar:
-    st.markdown("### ⚡ TERMINAL INDEX")
-    st.markdown("---")
-    st.page_link("0-E-TERMINAL.py", label="[00] Home: Switchboard")
-    st.page_link("pages/01-macro-bonds.py", label="[01] Macro Bond Watch")
-    st.page_link("pages/02-inflation.py", label="[02] Inflation 🚧")
-    st.page_link("pages/03-liquidity.py", label="[03] Liquidity 🚧")
-    st.page_link("pages/04-crypto.py", label="[04] Crypto Terminal 🚧")
-    st.page_link("pages/05-global-markets.py", label="[05] Global Markets 🚧")
-    st.page_link("pages/06-metals.py", label="[06] Metals 🚧")
-    st.page_link("pages/07-energy.py", label="[07] Energy 🚧")
-    st.page_link("pages/08-market-heatmap.py", label="[08] Market Heatmap")
-    st.page_link("pages/09-sectors.py", label="[09] Sectors 🚧")
-    st.page_link("pages/10-positioning.py", label="[10] Positioning 🚧")
-    st.page_link("pages/11-options-flow.py", label="[11] Options Flow 🚧")
-    st.page_link("pages/12-options-analyzer.py", label="[12] Options Analyzer 🚧")
-    st.markdown("---")
-    st.markdown("<span style='color:#00FF00; font-size:12px;'>SYS.STAT: ONLINE</span>", unsafe_allow_html=True)
-
-# --- 5. SWITCHBOARD GRID (CARDS) ---
+# --- 4. THE REORGANIZED SWITCHBOARD ---
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -162,6 +139,3 @@ with col3:
             <span class="construction-tag">🚧 UNDER CONSTRUCTION</span>
         </div>
     """, unsafe_allow_html=True)
-
-st.markdown("---")
-st.markdown("*SYSTEM STATUS: PARTIAL UPLINK. CORE MODULES ONLINE.*")

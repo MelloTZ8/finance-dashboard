@@ -30,7 +30,7 @@ with st.sidebar:
     st.markdown("### ⚡ TERMINAL INDEX")
     st.markdown("---")
     
-    st.page_link("0-home.py", label="[01] Home: Switchboard")
+    st.page_link("0-E-TERMINAL.py", label="[01] Home: Switchboard")
     st.page_link("pages/1-market-heatmap.py", label="[02] Market Heatmap")
     st.page_link("pages/2-macro-bonds.py", label="[03] Macro Bond Watch")
     st.page_link("pages/3-inflation.py", label="[04] Inflation 🚧")

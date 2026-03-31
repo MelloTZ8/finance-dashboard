@@ -17,13 +17,31 @@ st.set_page_config(page_title="TERMINAL: BOND WATCH", layout="wide")
 # Inject the master CSS
 inject_custom_css()
 
-st.title("Macro Bond Watch")
-# ... (the rest of your bond script stays exactly the same)
+# --- 2. LEFT-HAND INDEX (SIDEBAR) ---
+with st.sidebar:
+    st.markdown("### ⚡ TERMINAL INDEX")
+    st.markdown("---")
+    
+    st.page_link("0-E-TERMINAL.py", label="[01] Home: Switchboard")
+    st.page_link("pages/1-market-heatmap.py", label="[02] Market Heatmap")
+    st.page_link("pages/2-macro-bonds.py", label="[03] Macro Bond Watch")
+    st.page_link("pages/3-inflation.py", label="[04] Inflation 🚧")
+    st.page_link("pages/4-metals.py", label="[05] Metals 🚧")
+    st.page_link("pages/5-energy.py", label="[06] Energy 🚧")
+    st.page_link("pages/6-global-markets.py", label="[07] Global Markets 🚧")
+    st.page_link("pages/7-sectors.py", label="[08] Sectors 🚧")
+    st.page_link("pages/8-positioning.py", label="[09] Positioning 🚧")
+    st.page_link("pages/9-options-flow.py", label="[10] Options Flow 🚧")
+    st.page_link("pages/10-options-analyzer.py", label="[11] Options Analyzer 🚧")
+    st.page_link("pages/11-liquidity.py", label="[12] Liquidity 🚧")
+    
+    st.markdown("---")
+    st.markdown("<span style='color:#00FF00; font-size:12px;'>SYS.STAT: ONLINE</span>", unsafe_allow_html=True)
 
 st.title("Macro Bond Watch")
 st.markdown("Tracking the Treasury curve and spread dynamics to front-run regime shifts.")
 
-# --- 2. DATA LOADING ---
+# --- 3. DATA LOADING ---
 @st.cache_data
 def load_data():
     # 1. Grab your secret key from the "vault"
@@ -46,7 +64,7 @@ def load_data():
 
 df = load_data()
 
-# --- 3. INTERACTIVE CONTROLS ---
+# --- 4. INTERACTIVE CONTROLS ---
 min_date = df.index.min().to_pydatetime()
 max_date = df.index.max().to_pydatetime()
 
@@ -73,13 +91,13 @@ macd_label = MACD_DISPLAY_LABELS[macd_target]
 
 df_filtered = df[(df.index >= start_date) & (df.index <= end_date)].copy()
 
-# --- 4. MACD CALCULATION ---
+# --- 5. MACD CALCULATION ---
 df_filtered['MACD_Line'] = df_filtered[macd_target].ewm(span=12, adjust=False).mean() - df_filtered[macd_target].ewm(span=26, adjust=False).mean()
 df_filtered['Signal_Line'] = df_filtered['MACD_Line'].ewm(span=9, adjust=False).mean()
 df_filtered['MACD_Hist'] = df_filtered['MACD_Line'] - df_filtered['Signal_Line']
 df_filtered['Hist_Color'] = ['#00FF00' if val > 0 else '#FF0000' for val in df_filtered['MACD_Hist']]
 
-# --- 5. CHART BUILDING ---
+# --- 6. CHART BUILDING ---
 yield_cols = ['3-Month', '2-Year', '5-Year', '10-Year', '30-Year']
 colors = ['#FF0000', '#FF4500', '#FFD700', '#00BFFF', '#0000FF']
 
@@ -150,7 +168,7 @@ fig_macd.add_hline(y=0, line_color="white", line_width=1)
 fig_macd.update_layout(title=f'MACD: {macd_label}', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, bgcolor="rgba(0,0,0,0)"))
 fig_macd = apply_terminal_style(fig_macd)
 
-# --- 6. UI RENDER ---
+# --- 7. UI RENDER ---
 st.markdown("---")
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Combined Dashboard", "📈 1. Yield Spectrum", "📉 2. Spread Regimes", "📉 3. MACD Momentum"])
 
@@ -169,7 +187,7 @@ with tab4:
         key="macd_target",
     )
 
-# --- 7. REGIME DETECTOR ---
+# --- 8. REGIME DETECTOR ---
 st.markdown("---")
 st.subheader("Live Market Regime")
 
@@ -204,7 +222,7 @@ colB.metric("3m10s Spread", f"{val_3m10s:.2f}%")
 momentum_state = "Bullish (Steepening)" if macd_hist > 0 else "Bearish (Flattening/Inverting)"
 colC.metric(f"MACD Momentum ({macd_target[:6]})", momentum_state)
 
-# --- 8. EDUCATIONAL SUMMARY ---
+# --- 9. EDUCATIONAL SUMMARY ---
 st.markdown("---")
 st.subheader("The Gundlach Playbook: Reading the Regimes")
 st.markdown("""

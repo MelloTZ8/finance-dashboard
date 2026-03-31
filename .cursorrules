@@ -1,0 +1,15 @@
+Project Context: I am building a 12-page Streamlit macro finance dashboard. Every new Python script, chart, or UI element you write must strictly follow my "Bloomberg Terminal" aesthetic.
+
+Core Styling Rules:
+
+Backgrounds: Pure Black (#000000) or Dark Grey (#0a0a0a for cards/sidebars).
+
+Typography: Monospace only ('Courier New', Courier, monospace).
+
+Data & Body Text: Neon Green (#00FF00), size 14px.
+
+Headers & Accents: Bloomberg Amber (#FFB100), uppercase, with dark borders (#333333).
+
+Charts (Plotly): Always use template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", and hardcode the line colors to high-contrast neon hex codes.
+
+Execution: Always include the custom HTML/CSS injection block via st.markdown(unsafe_allow_html=True) at the top of any new page to override default Streamlit styling.

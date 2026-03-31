@@ -5,88 +5,20 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import datetime
 
+# We need to go up one folder level to grab the theme file since this script is inside /pages
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from theme import inject_custom_css
+
 # --- 1. PAGE CONFIG & BLOOMBERG THEME ---
 st.set_page_config(page_title="TERMINAL: BOND WATCH", layout="wide")
 
-# Bloomberg Terminal CSS Injection
-st.markdown(
-    """
-    <style>
-    /* Main background */
-    .stApp {
-        background-color: #000000 !important;
-    }
-    
-    /* Safely apply Monospace ONLY to actual text elements, ignoring Streamlit's icon font */
-    p, h1, h2, h3, h4, h5, h6, li, td, th, label, div[data-testid="stMetricValue"], .stMetric label {
-        font-family: 'Courier New', Courier, monospace !important;
-    }
+# Inject the master CSS
+inject_custom_css()
 
-    /* Target actual text content for Neon Green & Scale it down (14px) for high density */
-    [data-testid="stMarkdownContainer"] p, 
-    [data-testid="stMarkdownContainer"] li, 
-    .stDataFrame td, 
-    .stDataFrame th {
-        color: #00FF00 !important;
-        font-size: 14px !important; 
-        line-height: 1.5 !important;
-    }
-
-    /* Override headers to Bloomberg Amber and scale down */
-    h1, h2, h3, h4, h5, h6, .stSubheader {
-        color: #FFB100 !important;
-        text-transform: uppercase !important;
-        border-bottom: 1px solid #333333;
-    }
-    h1 { font-size: 24px !important; }
-    h2 { font-size: 20px !important; }
-    h3 { font-size: 16px !important; }
-
-    /* Fix the Slider and Sidebar Amber highlights */
-    [data-testid="stSidebar"] {
-        background-color: #0a0a0a !important;
-        border-right: 1px solid #FFB100;
-    }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
-        color: #FFB100 !important;
-        font-size: 14px !important;
-    }
-
-    /* Metrics Readouts - Neon Green */
-    [data-testid="stMetricValue"] {
-        color: #00FF00 !important;
-        font-size: 28px !important;
-        font-weight: bold;
-    }
-
-    /* Tab Styling */
-    [data-baseweb="tab-list"] {
-        background-color: #000000 !important;
-    }
-    [data-baseweb="tab"] {
-        background-color: #111111 !important;
-        color: #FFB100 !important;
-        border: 1px solid #333333;
-        font-size: 14px !important;
-    }
-    [aria-selected="true"] {
-        background-color: #FFB100 !important;
-        color: #000000 !important;
-    }
-    [aria-selected="true"] span, [aria-selected="true"] p {
-        color: #000000 !important;
-        font-weight: bold;
-    }
-
-    /* Adjust dividers */
-    hr {
-        border: 0;
-        border-top: 1px solid #333333 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.title("Macro Bond Watch")
+# ... (the rest of your bond script stays exactly the same)
 
 st.title("Macro Bond Watch")
 st.markdown("Tracking the Treasury curve and spread dynamics to front-run regime shifts.")

@@ -1,95 +1,11 @@
 import streamlit as st
+from theme import inject_custom_css  # <--- ADD THIS LINE
 
 # --- 1. PAGE CONFIG & BLOOMBERG THEME ---
 st.set_page_config(page_title="TERMINAL: SWITCHBOARD", layout="wide", initial_sidebar_state="expanded")
 
-# Bloomberg Terminal CSS Injection
-st.markdown(
-    """
-    <style>
-    /* Main background */
-    .stApp { background-color: #000000 !important; }
-    
-    /* Safely apply Monospace ONLY to actual text elements */
-    p, h1, h2, h3, h4, h5, h6, li, td, th, label, div[data-testid="stMetricValue"], .stMetric label {
-        font-family: 'Courier New', Courier, monospace !important;
-    }
-
-    /* Target actual text content for Neon Green */
-    [data-testid="stMarkdownContainer"] p, 
-    [data-testid="stMarkdownContainer"] li {
-        color: #00FF00 !important;
-        font-size: 14px !important; 
-        line-height: 1.5 !important;
-    }
-
-    /* Override headers to Bloomberg Amber */
-    h1, h2, h3, h4 {
-        color: #FFB100 !important;
-        text-transform: uppercase !important;
-        border-bottom: 1px solid #333333;
-        padding-bottom: 5px;
-    }
-    
-    /* --- SIDEBAR STYLING --- */
-    [data-testid="stSidebar"] {
-        background-color: #0a0a0a !important;
-        border-right: 1px solid #FFB100;
-    }
-    
-    /* Sidebar Links - Amber */
-    [data-testid="stSidebar"] a {
-        color: #FFB100 !important;
-        text-decoration: none !important;
-        font-family: 'Courier New', Courier, monospace !important;
-        font-size: 14px !important;
-    }
-    [data-testid="stSidebar"] a:hover {
-        color: #00FF00 !important;
-    }
-
-    /* --- MENU CARD STYLING --- */
-    div.menu-card {
-        background-color: #0a0a0a;
-        border: 1px solid #333333;
-        border-left: 3px solid #FFB100;
-        padding: 15px;
-        margin-bottom: 15px;
-        border-radius: 3px;
-        position: relative;
-    }
-    div.menu-card h4 {
-        color: #FFB100 !important;
-        margin-top: 0px;
-        margin-bottom: 10px;
-        font-size: 16px !important;
-        border-bottom: none;
-    }
-    div.menu-card p {
-        margin-bottom: 0px;
-        font-size: 13px !important;
-    }
-    
-    .construction-tag {
-        color: #FF4500 !important; 
-        font-size: 11px !important;
-        font-weight: bold;
-        border: 1px dashed #FF4500;
-        padding: 2px 6px;
-        border-radius: 3px;
-        display: inline-block;
-        margin-top: 8px;
-        background-color: rgba(255, 69, 0, 0.1);
-    }
-
-    hr {
-        border: 0;
-        border-top: 1px solid #333333 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Inject the master CSS
+inject_custom_css()  # <--- ADD THIS LINE
 
 # --- 2. LEFT-HAND INDEX (SIDEBAR) ---
 with st.sidebar:

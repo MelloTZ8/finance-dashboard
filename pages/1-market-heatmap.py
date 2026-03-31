@@ -1,5 +1,7 @@
 import time
 from datetime import datetime, timedelta
+import sys
+import os
 
 import feedparser
 import numpy as np
@@ -9,96 +11,63 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
+# Go up one level to grab our master theme file
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from theme import inject_custom_css
+
 # --- 1. PAGE CONFIG & STATE ---
 st.set_page_config(page_title="Dash 1.0", layout="wide")
 
-# Bloomberg Terminal CSS Injection
-st.markdown(
-    """
-   <style>
-    /* Main background */
-    .stApp {
-        background-color: #000000 !important;
-    }
-    
-    /* Safely apply Monospace ONLY to actual text elements, ignoring Streamlit's icon font */
-    p, h1, h2, h3, h4, h5, h6, li, td, th, label, div[data-testid="stMetricValue"] {
-        font-family: 'Courier New', Courier, monospace !important;
-    }
+# Inject the master CSS
+inject_custom_css()
 
-    /* Target actual text content for Neon Green & Scale it down (14px) for high density */
-    [data-testid="stMarkdownContainer"] p, 
-    [data-testid="stMarkdownContainer"] li, 
-    .stDataFrame td, 
-    .stDataFrame th {
-        color: #00FF00 !important;
-        font-size: 14px !important; 
-        line-height: 1.5 !important;
-    }
-
-    /* Override headers to Bloomberg Amber and scale down */
-    h1, h2, h3, h4, h5, h6, .stSubheader {
-        color: #FFB100 !important;
-        text-transform: uppercase !important;
-    }
-    h1 { font-size: 24px !important; }
-    h2 { font-size: 20px !important; }
-    h3 { font-size: 16px !important; }
-
-    /* Fix the Expander (Accordion) */
-    [data-testid="stExpander"] {
-        border: 1px solid #333333 !important;
-        background-color: #050505 !important;
-    }
-    summary p {
-        color: #FFB100 !important;
-        font-size: 14px !important;
-    }
-
-    /* Metrics Readouts - Keep these slightly larger */
-    [data-testid="stMetricValue"] {
-        color: #00FF00 !important;
-        font-size: 28px !important;
-        font-weight: bold;
-    }
-
-    /* Sidebar background and text (Amber emphasis) */
-    [data-testid="stSidebar"] {
-        background-color: #0a0a0a !important;
-        border-right: 1px solid #FFB100;
-    }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
-        color: #FFB100 !important;
-        font-size: 14px !important;
-    }
-
-    /* Tab Styling */
-    [data-baseweb="tab-list"] {
-        background-color: #000000 !important;
-    }
-    [data-baseweb="tab"] {
-        background-color: #111111 !important;
-        color: #FFB100 !important;
-        border: 1px solid #333333;
-        font-size: 14px !important;
-    }
-    [aria-selected="true"] {
-        background-color: #FFB100 !important;
-        color: #000000 !important;
-    }
-    [aria-selected="true"] span, [aria-selected="true"] p {
-        color: #000000 !important;
-        font-weight: bold;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 # Cloud-Safe Session State Init
 if "pg" not in st.session_state:
     st.session_state.pg = 0
 
-# --- 2. ASSET BUCKETS ---
+# --- 2. LEFT-HAND INDEX (SIDEBAR) ---
+with st.sidebar:
+    st.markdown("### ⚡ TERMINAL INDEX")
+    st.markdown("---")
+    
+    st.page_link("0-home.py", label="[01] Home: Switchboard")
+    st.page_link("pages/1-market-heatmap.py", label="[02] Market Heatmap")
+    st.page_link("pages/2-macro-bonds.py", label="[03] Macro Bond Watch")
+    st.page_link("pages/3-inflation.py", label="[04] Inflation 🚧")
+    st.page_link("pages/4-metals.py", label="[05] Metals 🚧")
+    st.page_link("pages/5-energy.py", label="[06] Energy 🚧")
+    st.page_link("pages/6-global-markets.py", label="[07] Global Markets 🚧")
+    st.page_link("pages/7-sectors.py", label="[08] Sectors 🚧")
+    st.page_link("pages/8-positioning.py", label="[09] Positioning 🚧")
+    st.page_link("pages/9-options-flow.py", label="[10] Options Flow 🚧")
+    st.page_link("pages/10-options-analyzer.py", label="[11] Options Analyzer 🚧")
+    st.page_link("pages/11-liquidity.py", label="[12] Liquidity 🚧")
+    
+    st.markdown("---")
+    st.markdown("<span style='color:#00FF00; font-size:12px;'>SYS.STAT: ONLINE</span>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    st.header("📐 Correlation Decoder")
+    with st.expander("Detailed Quartile Interpretation", expanded=True):
+        st.markdown(
+            """
+        **🔴 Positive (Synergy)**
+        * **1.00:** Perfect Lockstep
+        * **0.75 - 0.99:** Strong Synergy
+        * **0.50 - 0.74:** Moderate Driver
+        * **0.25 - 0.49:** Weak/Positive Drift
+        * **0.00 - 0.24:** Noise/Neutral
+
+        **🔵 Negative (Seesaw)**
+        * **-1.00:** Perfect Inverse
+        * **-0.75 to -0.99:** Strong Inverse
+        * **-0.50 to -0.74:** Strong Hedge
+        * **-0.25 to -0.49:** Weak Divergence
+        * **0.00 to -0.24:** Noise/Neutral
+        """
+        )
+
+# --- 3. ASSET BUCKETS ---
 categories = {
     "B: Digital Assets": {"IBIT": "₿ IBIT", "MSTR": "₿ MSTR"},
     "C: Tech": {"MSFT": "💻 MSFT", "AAPL": "💻 AAPL", "GOOGL": "💻 GOOGL"},
@@ -116,74 +85,17 @@ categories = {
 }
 
 color_map = {
-    "🟦 TIP": "#0000FF",
-    "🟦 TLT": "#4169E1",
-    "🟦 DXY": "#00BFFF",
-    "🟦 10Y": "#191970",
-    "💀 VIX": "#708090",
-    "₿ IBIT": "#FF8C00",
-    "₿ MSTR": "#E67E22",
-    "💻 MSFT": "#00FFFF",
-    "💻 AAPL": "#20B2AA",
-    "💻 GOOGL": "#48D1CC",
-    "📟 NVDA": "#FFD700",
-    "📟 AMD": "#DAA520",
-    "📟 AVGO": "#BDB76B",
-    "🔥 XLE": "#FF0000",
-    "🔥 XOM": "#DC143C",
-    "🔥 DBC": "#8B0000",
-    "🟡 GLD": "#FFD700",
-    "🏦 KBE": "#800080",
-    "🏦 JPM": "#9370DB",
-    "🏦 BRK": "#4B0082",
-    "🛡️ SCHD": "#008000",
-    "🛡️ WMT": "#32CD32",
-    "🛡️ PG": "#228B22",
+    "🟦 TIP": "#0000FF", "🟦 TLT": "#4169E1", "🟦 DXY": "#00BFFF", "🟦 10Y": "#191970",
+    "💀 VIX": "#708090", "₿ IBIT": "#FF8C00", "₿ MSTR": "#E67E22", "💻 MSFT": "#00FFFF",
+    "💻 AAPL": "#20B2AA", "💻 GOOGL": "#48D1CC", "📟 NVDA": "#FFD700", "📟 AMD": "#DAA520",
+    "📟 AVGO": "#BDB76B", "🔥 XLE": "#FF0000", "🔥 XOM": "#DC143C", "🔥 DBC": "#8B0000",
+    "🟡 GLD": "#FFD700", "🏦 KBE": "#800080", "🏦 JPM": "#9370DB", "🏦 BRK": "#4B0082",
+    "🛡️ SCHD": "#008000", "🛡️ WMT": "#32CD32", "🛡️ PG": "#228B22",
 }
 
 category_emojis = {
-    "Indicators": "📉",
-    "Digital Assets": "₿",
-    "Tech": "💻",
-    "Semis": "📟",
-    "Energy/Inf": "🔥",
-    "Financials": "🏦",
-    "Defensive": "🛡️",
-}
-
-# --- 3. SIDEBAR (Restored Full Legend) ---
-st.sidebar.header("📐 Correlation Decoder")
-with st.sidebar.expander("Detailed Quartile Interpretation", expanded=True):
-    st.markdown(
-        """
-    **🔴 Positive (Synergy)**
-    * **1.00:** Perfect Lockstep
-    * **0.75 - 0.99:** Strong Synergy
-    * **0.50 - 0.74:** Moderate Driver
-    * **0.25 - 0.49:** Weak/Positive Drift
-    * **0.00 - 0.24:** Noise/Neutral
-
-    **🔵 Negative (Seesaw)**
-    * **-1.00:** Perfect Inverse
-    * **-0.75 to -0.99:** Strong Inverse
-    * **-0.50 to -0.74:** Strong Hedge
-    * **-0.25 to -0.49:** Weak Divergence
-    * **0.00 to -0.24:** Noise/Neutral
-    """
-    )
-
-st.sidebar.divider()
-st.sidebar.header("🕒 Dashboard Controls")
-day_offset = st.sidebar.slider("Snapshot Day", 0, 252, 0)
-comp_lookback = st.sidebar.slider("Comparison Start", 2, 252, 60)
-window_size = st.sidebar.slider("Correlation Sensitivity", 5, 60, 21)
-
-st.sidebar.header("🗞️ Terminal Feed")
-active_feeds = {
-    "CNBC Alerts": st.sidebar.checkbox("CNBC Breaking", True),
-    "MarketWatch": st.sidebar.checkbox("MarketPulse", True),
-    "Yahoo": st.sidebar.checkbox("Yahoo Finance", True),
-    "FT": st.sidebar.checkbox("Financial Times", True),
+    "Indicators": "📉", "Digital Assets": "₿", "Tech": "💻", "Semis": "📟",
+    "Energy/Inf": "🔥", "Financials": "🏦", "Defensive": "🛡️",
 }
 
 # --- 4. DATA LOADING (Cloud-Hardened) ---
@@ -192,18 +104,13 @@ def load_market_data(ticker_list: list[str]) -> pd.DataFrame:
     for _ in range(3):
         try:
             df = yf.download(
-                ticker_list + ["GLD"],
-                period="3y",
-                progress=False,
-                auto_adjust=False,
-                threads=True,
+                ticker_list + ["GLD"], period="3y", progress=False, auto_adjust=False, threads=True,
             )
             if isinstance(df.columns, pd.MultiIndex):
                 if "Close" in df.columns.get_level_values(0):
                     df = df["Close"]
                 else:
                     df = df.xs("Close", axis=1, level=0, drop_level=True)
-
             if not df.empty:
                 if "^TNX" in df.columns:
                     df["^TNX"] = df["^TNX"] / 10
@@ -211,7 +118,6 @@ def load_market_data(ticker_list: list[str]) -> pd.DataFrame:
         except Exception:
             time.sleep(2)
     return pd.DataFrame()
-
 
 all_tickers = list({t for c in categories.values() for t in c.keys()} | {"GLD"})
 raw_data = load_market_data(all_tickers)
@@ -222,7 +128,6 @@ if raw_data.empty:
     st.error("📡 Yahoo Finance API rate limit hit or unavailable. Please try again in a few minutes.")
     st.stop()
 
-# Ensure symbols exist before further processing
 available_tickers = [t for t in rename_map if t in raw_data.columns]
 if not available_tickers:
     st.error("No expected tickers were returned by Yahoo Finance in this run.")
@@ -230,6 +135,21 @@ if not available_tickers:
 
 safe_rename_map = {t: rename_map[t] for t in available_tickers}
 raw_data = raw_data[available_tickers]
+
+# --- Date Boundaries for Sliders ---
+last_date = raw_data.index[-1].date()
+# Max lookback of 252 trading days (~1 calendar year)
+if len(raw_data) >= 252:
+    min_date_252 = raw_data.index[-252].date()
+else:
+    min_date_252 = raw_data.index[0].date()
+
+# Default lookback of 30 trading days
+if len(raw_data) >= 30:
+    default_start = raw_data.index[-30].date()
+else:
+    default_start = raw_data.index[0].date()
+
 
 # --- 5. UTILITIES ---
 def get_perf_and_trend(series: pd.Series, days: int) -> tuple[str, str]:
@@ -245,65 +165,52 @@ def get_perf_and_trend(series: pd.Series, days: int) -> tuple[str, str]:
     except Exception:
         return "0.00%", "⚪"
 
-
 def draw_gauge(title: str, val: float, col, key: str) -> None:
     v = float(np.clip(val, -1, 1))
     color = (
-        f"rgb(255, {int(255 * (1 - v))}, {int(255 * (1 - v))})"
-        if v > 0
+        f"rgb(255, {int(255 * (1 - v))}, {int(255 * (1 - v))})" if v > 0
         else f"rgb({int(255 * (1 + v))}, {int(255 * (1 + v))}, 255)"
     )
     fig = go.Figure(
         go.Indicator(
-            mode="gauge+number",
-            value=v,
+            mode="gauge+number", value=v,
             title={"text": title, "font": {"size": 14, "color": "#FFB100"}},
             number={"font": {"size": 24, "color": "#00FF00"}},
             gauge={
                 "axis": {"range": [-1, 1], "tickvals": [-1, -0.5, 0, 0.5, 1], "tickfont": {"color": "#00FF00"}},
-                "bar": {"color": color},
-                "bgcolor": "#1A1A1A",
-                "borderwidth": 1,
-                "bordercolor": "#333333"
+                "bar": {"color": color}, "bgcolor": "#1A1A1A", "borderwidth": 1, "bordercolor": "#333333"
             },
         )
     )
     fig.update_layout(
-        height=170,
-        margin=dict(l=10, r=10, t=50, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        height=170, margin=dict(l=10, r=10, t=50, b=20),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font={"family": "Courier New, monospace"},
     )
-    col.plotly_chart(fig, use_container_width=True, key=key)
+    col.plotly_chart(fig, width="stretch", key=key)
 
 
-# --- 6. PROCESSING ---
-last_idx = len(raw_data) - 1
-target_idx = max(0, last_idx - day_offset)
-snapshot_date = raw_data.index[target_idx]
-full_window = raw_data.iloc[: target_idx + 1]
-
-effective_window_size = min(window_size, len(full_window))
-corr_window = full_window.iloc[-effective_window_size:].rename(columns=safe_rename_map)
-
-ordered_labels = [safe_rename_map[t] for t in safe_rename_map if t != "GLD"]
-if "GLD" in safe_rename_map:
-    ordered_labels.append("🟡 GLD")
-
-present_labels = [lbl for lbl in ordered_labels if lbl in corr_window.columns]
-if len(present_labels) < 2:
-    st.error("Not enough overlapping data to compute correlations.")
-    st.stop()
-
-corr_matrix = corr_window[present_labels].corr()
-
-# --- 7. TABS ---
+# --- 6. TABS & UI RENDERING ---
 tab1, tab2 = st.tabs(["📊 Market Analysis", "📰 Terminal Feed"])
 
 with tab1:
-    # 1. Charts with Grouped Toggles
-    st.subheader(f"1. Performance Snapshot: {snapshot_date.strftime('%Y-%m-%d')}")
+    # ==========================================
+    # 1. PERFORMANCE SNAPSHOT
+    # ==========================================
+    st.subheader("1. Performance Snapshot")
+    
+    # 2-Sided Slider for specific chart bounds
+    comp_start, comp_end = st.slider(
+        "Chart Timeframe Window",
+        min_value=min_date_252, 
+        max_value=last_date,
+        value=(default_start, last_date),
+        format="DD/MM/YYYY"
+    )
+    
+    # Calculate trading days selected and format dates
+    trading_days_selected = len(raw_data.loc[str(comp_start):str(comp_end)])
+    st.markdown(f"**Period:** {comp_start.strftime('%d/%m/%Y')} ➔ {comp_end.strftime('%d/%m/%Y')} <span style='color:#FFB100;'>({trading_days_selected} Trading Days)</span>", unsafe_allow_html=True)
 
     with st.expander("⚙️ Filter Chart Assets by Category", expanded=False):
         selected_chart_labels = []
@@ -318,108 +225,138 @@ with tab1:
     if not selected_chart_labels:
         st.warning("Please select at least one asset to display the chart.")
     else:
-        lookback = min(comp_lookback, len(full_window))
-        perf_window = full_window.iloc[max(0, len(full_window) - lookback) :].rename(columns=safe_rename_map)
+        # Slice data strictly to the slider bounds
+        perf_window = raw_data.loc[str(comp_start):str(comp_end)].rename(columns=safe_rename_map)
         valid_chart_labels = [lbl for lbl in selected_chart_labels if lbl in perf_window.columns]
-        if valid_chart_labels:
+        
+        if valid_chart_labels and not perf_window.empty:
             norm_data = (perf_window[valid_chart_labels] / perf_window[valid_chart_labels].iloc[0]) * 100
             fig_line = px.line(norm_data, log_y=True, template="plotly_dark", color_discrete_map=color_map)
-            fig_line.update_layout(
-                hovermode="closest",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)"
-            )
-            st.plotly_chart(fig_line, use_container_width=True)
+            fig_line.update_layout(hovermode="closest", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_line, width="stretch")
         else:
             st.warning("Selected assets are not available in this data snapshot.")
 
-    # 2. Heatmap
+    # ==========================================
+    # 2. MARKET DNA HEATMAP
+    # ==========================================
+    st.divider()
     st.subheader("2. Market DNA Heatmap 🔥")
-    masked = corr_matrix.mask(np.triu(np.ones_like(corr_matrix, dtype=bool)))
-    fig_corr = px.imshow(
-        masked,
-        text_auto=".2f",
-        aspect="auto",
-        color_continuous_scale="RdBu_r",
-        range_color=[-1, 1],
-        template="plotly_dark",
-    )
-    fig_corr.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"family": "Courier New, monospace", "color": "#00FF00"}
-    )
-    st.plotly_chart(fig_corr, use_container_width=True)
+    
+    col_snap, col_dial = st.columns(2)
+    with col_snap:
+        # Single point date slider
+        snap_date_sel = st.slider(
+            "Target Snapshot Day",
+            min_value=min_date_252, 
+            max_value=last_date,
+            value=last_date,
+            format="DD/MM/YYYY"
+        )
+        # Snap the selected date to the nearest valid trading day
+        closest_snap_idx = raw_data.index.get_indexer([pd.Timestamp(snap_date_sel)], method='pad')[0]
+        actual_snap_date = raw_data.index[closest_snap_idx]
+        
+        # Calculate how many days ago this is
+        days_ago = len(raw_data.loc[actual_snap_date:last_date]) - 1
+        day_text = "Today" if days_ago == 0 else f"{days_ago} Trading Days Ago"
+        st.markdown(f"**Locked Date:** {actual_snap_date.strftime('%d/%m/%Y')} <span style='color:#FFB100;'>({day_text})</span>", unsafe_allow_html=True)
+        
+    with col_dial:
+        # The "Dial" for Correlation Sensitivity
+        window_size = st.slider(
+            "🎛️ Sensitivity Dial (Lookback Window)",
+            min_value=5, max_value=60, value=21, step=1
+        )
+        st.markdown(f"**Engine Setting:** <span style='color:#00FF00;'>Computing {window_size}-Day Rolling Correlation</span>", unsafe_allow_html=True)
 
-    # 3. Command Center
+    # Calculate Matrix based on new local variables
+    full_window = raw_data.iloc[: closest_snap_idx + 1]
+    effective_window_size = min(window_size, len(full_window))
+    corr_window = full_window.iloc[-effective_window_size:].rename(columns=safe_rename_map)
+
+    ordered_labels = [safe_rename_map[t] for t in safe_rename_map if t != "GLD"]
+    if "GLD" in safe_rename_map:
+        ordered_labels.append("🟡 GLD")
+
+    present_labels = [lbl for lbl in ordered_labels if lbl in corr_window.columns]
+    
+    if len(present_labels) >= 2:
+        corr_matrix = corr_window[present_labels].corr()
+        masked = corr_matrix.mask(np.triu(np.ones_like(corr_matrix, dtype=bool)))
+        fig_corr = px.imshow(
+            masked, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r",
+            range_color=[-1, 1], template="plotly_dark",
+        )
+        fig_corr.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font={"family": "Courier New, monospace", "color": "#00FF00"}
+        )
+        st.plotly_chart(fig_corr, width="stretch")
+    else:
+        st.error("Not enough overlapping data to compute correlations.")
+
+    # ==========================================
+    # 3. MACRO COMMAND CENTER
+    # ==========================================
     st.divider()
     st.subheader("3. Macro Command Center: Gauges")
-    anchors = [
-        ("TLT", "📉 Bonds"),
-        ("^TNX", "🏛️ 10Y Yield"),
-        ("DX-Y.NYB", "💵 US Dollar"),
-        ("MSTR", "₿ Crypto"),
-        ("MSFT", "💻 Tech"),
-        ("NVDA", "📟 Semis"),
-        ("XLE", "🔥 Energy"),
-        ("JPM", "🏦 Banks"),
-        ("WMT", "🛡️ Defensive"),
-        ("^VIX", "💀 Volatility"),
-    ]
+    
+    if len(present_labels) >= 2:
+        anchors = [
+            ("TLT", "📉 Bonds"), ("^TNX", "🏛️ 10Y Yield"), ("DX-Y.NYB", "💵 US Dollar"),
+            ("MSTR", "₿ Crypto"), ("MSFT", "💻 Tech"), ("NVDA", "📟 Semis"),
+            ("XLE", "🔥 Energy"), ("JPM", "🏦 Banks"), ("WMT", "🛡️ Defensive"), ("^VIX", "💀 Volatility"),
+        ]
 
-    for ticker, row_title in anchors:
-        if ticker not in full_window.columns or ticker not in safe_rename_map:
-            continue
-
-        st.markdown(f"### {row_title} vs Sector Averages")
-        t_col, g_col = st.columns([2, 8])
-        anchor_s = full_window[ticker]
-
-        p_data = {
-            "Period": ["1D", "1M", "3M", "6M"],
-            "Perf %": [get_perf_and_trend(anchor_s, d)[0] for d in [2, 21, 63, 126]],
-            "Trend": [get_perf_and_trend(anchor_s, d)[1] for d in [2, 21, 63, 126]],
-        }
-
-        t_col.dataframe(pd.DataFrame(p_data), hide_index=True)
-
-        # Filter out 'A: Indicators' from the gauge loop
-        active_cats = [c for c in categories if ticker not in categories[c] and c != "A: Indicators"]
-        gauge_cols = g_col.columns(len(active_cats) + 1)
-        anchor_lbl = safe_rename_map[ticker]
-        section_audit = []
-
-        for i, cat_name in enumerate(active_cats):
-            cat_ticks = [tk for tk in categories[cat_name] if tk in safe_rename_map]
-            cat_labels = [safe_rename_map[tk] for tk in cat_ticks if safe_rename_map[tk] in corr_matrix.columns]
-            if not cat_labels or anchor_lbl not in corr_matrix.index:
+        for ticker, row_title in anchors:
+            if ticker not in full_window.columns or ticker not in safe_rename_map:
                 continue
 
-            indiv_vals = [corr_matrix.loc[anchor_lbl, lbl] for lbl in cat_labels]
-            avg_val = float(np.mean(indiv_vals))
-            short_name = cat_name.split(": ")[1]
-            emoji = category_emojis.get(short_name, "")
-            draw_gauge(f"{emoji} {short_name}", avg_val, gauge_cols[i], f"g_{ticker}_{cat_name}_{day_offset}")
-            section_audit.append(
-                {
-                    "Sector": short_name,
-                    "Values": ", ".join([f"{v:.2f}" for v in indiv_vals]),
-                    "Avg": f"{avg_val:.2f}",
-                }
-            )
+            st.markdown(f"### {row_title} vs Sector Averages")
+            t_col, g_col = st.columns([2, 8])
+            anchor_s = full_window[ticker]
 
-        if "🟡 GLD" in corr_matrix.columns and anchor_lbl in corr_matrix.index:
-            draw_gauge(
-                "🟡 Gold",
-                corr_matrix.loc[anchor_lbl, "🟡 GLD"],
-                gauge_cols[-1],
-                f"gold_{ticker}_{day_offset}",
-            )
+            p_data = {
+                "Period": ["1D", "1M", "3M", "6M"],
+                "Perf %": [get_perf_and_trend(anchor_s, d)[0] for d in [2, 21, 63, 126]],
+                "Trend": [get_perf_and_trend(anchor_s, d)[1] for d in [2, 21, 63, 126]],
+            }
 
-        with st.expander(f"🧮 {row_title} Math Audit"):
-            st.dataframe(pd.DataFrame(section_audit), hide_index=True)
+            t_col.dataframe(pd.DataFrame(p_data), hide_index=True)
 
+            active_cats = [c for c in categories if ticker not in categories[c] and c != "A: Indicators"]
+            gauge_cols = g_col.columns(len(active_cats) + 1)
+            anchor_lbl = safe_rename_map[ticker]
+            section_audit = []
+
+            for i, cat_name in enumerate(active_cats):
+                cat_ticks = [tk for tk in categories[cat_name] if tk in safe_rename_map]
+                cat_labels = [safe_rename_map[tk] for tk in cat_ticks if safe_rename_map[tk] in corr_matrix.columns]
+                if not cat_labels or anchor_lbl not in corr_matrix.index:
+                    continue
+
+                indiv_vals = [corr_matrix.loc[anchor_lbl, lbl] for lbl in cat_labels]
+                avg_val = float(np.mean(indiv_vals))
+                short_name = cat_name.split(": ")[1]
+                emoji = category_emojis.get(short_name, "")
+                
+                # Pass a unique key using actual_snap_date and window_size
+                draw_gauge(f"{emoji} {short_name}", avg_val, gauge_cols[i], f"g_{ticker}_{cat_name}_{actual_snap_date}_{window_size}")
+                
+                section_audit.append({
+                    "Sector": short_name, "Values": ", ".join([f"{v:.2f}" for v in indiv_vals]), "Avg": f"{avg_val:.2f}",
+                })
+
+            if "🟡 GLD" in corr_matrix.columns and anchor_lbl in corr_matrix.index:
+                draw_gauge("🟡 Gold", corr_matrix.loc[anchor_lbl, "🟡 GLD"], gauge_cols[-1], f"gold_{ticker}_{actual_snap_date}_{window_size}")
+
+            with st.expander(f"🧮 {row_title} Math Audit"):
+                st.dataframe(pd.DataFrame(section_audit), hide_index=True)
+
+    # ==========================================
     # 4. REGIME & EXPANDED NARRATIVES
+    # ==========================================
     st.divider()
     if "^TNX" in full_window.columns and "DX-Y.NYB" in full_window.columns and len(full_window) >= 6:
         y_chg = full_window["^TNX"].diff(5).iloc[-1]
@@ -428,12 +365,9 @@ with tab1:
         y_chg, d_chg = 0.0, 0.0
 
     regime = (
-        "STAGFLATION (Risk-Off)"
-        if y_chg > 0 and d_chg > 0
-        else "REFLATION (Sector Rotation)"
-        if y_chg > 0
-        else "DEFLATION (Risk-Off)"
-        if d_chg > 0
+        "STAGFLATION (Risk-Off)" if y_chg > 0 and d_chg > 0
+        else "REFLATION (Sector Rotation)" if y_chg > 0
+        else "DEFLATION (Risk-Off)" if d_chg > 0
         else "GOLDILOCKS (Risk-On)"
     )
 
@@ -451,7 +385,9 @@ with tab1:
         """
         )
 
-    # 5. RESTORED FOOTER (Analysis & Recipe)
+    # ==========================================
+    # 5. RESTORED FOOTER
+    # ==========================================
     st.divider()
     st.subheader("📝 Analysis Summary & Thesis")
     st.markdown(
@@ -464,33 +400,24 @@ with tab1:
         <li><b>The Digital Hedge (VIX vs Crypto):</b> Inverse correlation to VIX signals 'Digital Gold'. Moving with VIX signals 'High-Beta Risk'.</li>
     </ul>
     </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-    st.subheader("🏁 Footnote: Gauge Ingredients & Manual")
-    st.markdown(
-        r"""
-    ### 🛠️ Sector Ingredients (The Recipe)
-    Each gauge averages the **individual correlation coefficients** from the Heatmap for the following assets:
-    * **📉 Indicators:** TIP, TLT, DXY, 10Y Yield, VIX
-    * **₿ Digital Assets:** IBIT, MSTR
-    * **💻 Tech:** MSFT, AAPL, GOOGL
-    * **📟 Semis:** NVDA, AMD, AVGO
-    * **🔥 Energy/Inf:** XLE, XOM, DBC
-    * **🏦 Financials:** KBE, JPM, BRK-B
-    * **🛡️ Defensive:** SCHD, WMT, PG
-
-    ### 💡 How to Read the Dials
-    **Example:** Looking at **📉 TLT (Bonds)** vs **💻 Tech**:
-    1. **Left Swing (Blue) [-1.0 to -0.5]:** Bonds down, Tech down. Rates are the primary killer.
-    2. **Right Swing (Red) [+0.5 to +1.0]:** Bonds up, Tech up. Market is pricing in a "Pivot" or growth bid.
-    """
+    """, unsafe_allow_html=True,
     )
 
 with tab2:
     st.header("🗞️ Macro Terminal Feed")
+    
+    with st.expander("⚙️ Feed Configuration", expanded=True):
+        st.markdown("Toggle active sources for the terminal scrape:")
+        fc1, fc2, fc3, fc4 = st.columns(4)
+        active_feeds = {
+            "CNBC Alerts": fc1.checkbox("CNBC Breaking", True),
+            "MarketWatch": fc2.checkbox("MarketPulse", True),
+            "Yahoo": fc3.checkbox("Yahoo Finance", True),
+            "FT": fc4.checkbox("Financial Times", True),
+        }
+        
+    st.markdown("---")
+
     urls = {
         "CNBC Alerts": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=401&id=10000664",
         "MarketWatch": "http://feeds.marketwatch.com/marketwatch/marketpulse/",
@@ -525,7 +452,7 @@ with tab2:
     start = st.session_state.pg * 50
     for item in all_news[start : start + 50]:
         st.write(
-            f"**{item['Date'].strftime('%m/%d %H:%M')}** | `{item['Source']}` : [{item['Title']}]({item['Link']})"
+            f"**{item['Date'].strftime('%d/%m %H:%M')}** | `{item['Source']}` : [{item['Title']}]({item['Link']})"
         )
 
     c1, c2 = st.columns(2)

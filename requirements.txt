@@ -1,0 +1,7 @@
+streamlit
+pandas
+yfinance
+plotly
+pandas-datareader
+feedparser
+setuptools

@@ -223,13 +223,13 @@ st.markdown("---")
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Combined Dashboard", "📈 1. Yield Spectrum", "📉 2. Spread Regimes", "📉 3. MACD Momentum"])
 
 with tab1:
-    st.plotly_chart(fig_combined, use_container_width=True)
+    st.plotly_chart(fig_combined, width="stretch")
 with tab2:
-    st.plotly_chart(fig_yields, use_container_width=True)
+    st.plotly_chart(fig_yields, width="stretch")
 with tab3:
-    st.plotly_chart(fig_spreads, use_container_width=True)
+    st.plotly_chart(fig_spreads, width="stretch")
 with tab4:
-    st.plotly_chart(fig_macd, use_container_width=True)
+    st.plotly_chart(fig_macd, width="stretch")
     st.selectbox(
         "Select Spread for MACD Analysis",
         options=MACD_OPTIONS,

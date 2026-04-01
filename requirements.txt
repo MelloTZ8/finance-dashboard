@@ -5,3 +5,4 @@ plotly
 fredapi
 feedparser
 setuptools
+requests

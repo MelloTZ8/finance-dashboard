@@ -35,6 +35,15 @@ def inject_custom_css():
             background-color: #0a0a0a !important;
             border-right: 1px solid #FFB100;
         }
+        /* Sidebar: keep natural casing (E-Terminal, page titles) — main area still uppercase headers */
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h4,
+        [data-testid="stSidebar"] h5,
+        [data-testid="stSidebar"] h6 {
+            text-transform: none !important;
+        }
         [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] a {
             color: #FFB100 !important;
             text-decoration: none !important;

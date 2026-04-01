@@ -145,7 +145,7 @@ def render_sidebar():
         st.markdown("### ⚡ TERMINAL INDEX")
         st.markdown("---")
         # --- UPDATED FILE STRUCTURE LINKS ---
-        st.page_link("00_eterminal.py", label="[00] Home: Switchboard")
+        st.page_link("00_E-Terminal.py", label="[00] Home: Switchboard")
         st.page_link("pages/01_Macro_Bonds.py", label="[01] Macro Bond Watch")
         st.page_link("pages/02_Inflation.py", label="[02] Inflation")
         st.page_link("pages/03_Liquidity.py", label="[03] Liquidity")

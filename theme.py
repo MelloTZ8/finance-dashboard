@@ -90,7 +90,30 @@ def inject_custom_css():
             margin-bottom: 0px;
             font-size: 13px !important;
         }
-        
+
+        /* Switchboard: bordered blocks + page links on home only (0-E-TERMINAL) */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #0a0a0a !important;
+            border: 1px solid #333333 !important;
+            border-left: 3px solid #FFB100 !important;
+            padding: 10px 12px !important;
+            margin-bottom: 12px !important;
+            border-radius: 3px !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stPageLink-Container"] a {
+            color: #FFB100 !important;
+            font-weight: bold !important;
+            font-size: 15px !important;
+            text-decoration: none !important;
+            font-family: 'Courier New', Courier, monospace !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stCaptionContainer"] {
+            color: #aaaaaa !important;
+            font-size: 14px !important;
+            line-height: 1.45 !important;
+            font-family: 'Courier New', Courier, monospace !important;
+        }
+
         /* Construction Tag Styling */
         .construction-tag {
             color: #FF4500 !important; 
@@ -108,6 +131,71 @@ def inject_custom_css():
         hr {
             border: 0;
             border-top: 1px solid #333333 !important;
+        }
+
+        /* --- BLOOMBERG TERMINAL (raw HTML in markdown on home / ribbons) --- */
+        [data-testid="stMarkdownContainer"] .bb-terminal,
+        [data-testid="stMarkdownContainer"] .bb-terminal * {
+            font-family: 'Courier New', Courier, monospace !important;
+        }
+        /* Switchboard / MARKETS section titles — baseline for hero scale */
+        h3.bb-switchboard-section {
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            color: #FFB100 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.04em !important;
+            border-bottom: 1px solid #333333 !important;
+            padding-bottom: 6px !important;
+            margin: 0 0 0.35rem 0 !important;
+        }
+        .bb-terminal .bb-hero-title {
+            font-size: calc(1.5rem * 1.15) !important;
+            font-weight: 700;
+            color: #FFB100 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .bb-terminal .bb-hero-date {
+            font-size: 1.05rem;
+            color: #888888 !important;
+            font-weight: 400;
+        }
+        .bb-terminal .bb-section-head {
+            font-size: 14px;
+            font-weight: 700;
+            color: #FFB100 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-bottom: 1px solid #333333;
+            padding-bottom: 5px;
+            margin: 0 0 8px 0;
+        }
+        .bb-terminal .bb-label {
+            color: #00FF00 !important;
+            font-weight: 700;
+        }
+        .bb-terminal .bb-price {
+            color: #FFB100 !important;
+            font-weight: 700;
+        }
+        .bb-terminal .bb-pos { color: #00FF00 !important; font-weight: 700; }
+        .bb-terminal .bb-neg { color: #FF0000 !important; font-weight: 700; }
+        .bb-terminal .bb-flat { color: #AAAAAA !important; }
+        .bb-terminal .bb-muted { color: #888888 !important; }
+        .bb-terminal .bb-sep { color: #444444 !important; }
+        .bb-terminal .bb-cyan { color: #00BFFF !important; font-weight: 700; }
+        .bb-terminal .bb-vix-tag {
+            color: #FFB100 !important;
+            font-weight: 700;
+        }
+        .bb-terminal .bb-ribbon-sub {
+            font-size: 11px;
+            font-weight: 700;
+            color: #888888 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin: 0 0 6px 0;
         }
         </style>
         """,

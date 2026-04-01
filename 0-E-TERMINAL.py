@@ -32,59 +32,108 @@ with st.sidebar:
     st.page_link("pages/12-options-analyzer.py", label="[12] Options Analyzer")
     
     st.markdown("---")
-    st.markdown("<span style='color:#00FF00; font-size:12px;'>SYS.STAT: ONLINE</span>", unsafe_allow_html=True)
+    st.markdown("SYS.STAT: ONLINE")
 
 # --- 3. DATA ENGINE (Header Tickers) ---
 @st.cache_data(ttl=600)
 def get_header_data():
-    # S&P, Nasdaq, Dow, Crude, ES Futures, NQ Futures, BTC, VIX
+    """Per-symbol OHLC calendars differ (cash vs futures vs crypto). Do not ffill a
+    shared date index for returns: that makes the last two rows identical for symbols
+    that did not print on the latest bar, so 1D shows 0% or wrong values."""
     tickers = ["^GSPC", "^IXIC", "^DJI", "CL=F", "ES=F", "NQ=F", "BTC-USD", "^VIX"]
-    data = yf.download(tickers, period="2y", progress=False)['Close']
-    data.ffill(inplace=True) # Prevent NA drops due to holiday/futures hours mismatches
-    
-    curr = data.iloc[-1]
-    prev_1d = data.iloc[-2]
-    prev_1w = data.iloc[-6]
-    prev_1m = data.iloc[-22] if len(data) >= 22 else data.iloc[0]
-    
-    # YTD Calculation
-    year_start = datetime(datetime.now().year, 1, 1)
-    ytd_data = data.loc[data.index >= pd.to_datetime(year_start)]
-    start_ytd = ytd_data.iloc[0] if not ytd_data.empty else curr
-    
-    # YoY Calculation
-    yoy_idx = -252 if len(data) >= 252 else 0
-    start_yoy = data.iloc[yoy_idx]
-    
+    raw = yf.download(tickers, period="2y", progress=False, threads=False)
+    close = raw["Close"].copy()
+    if isinstance(close.columns, pd.MultiIndex):
+        close.columns = close.columns.droplevel(0)
+
+    y = datetime.now().year
+    curr, prev_1d, prev_1w, prev_1m, start_ytd, start_yoy = (
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+    )
+
+    for t in tickers:
+        if t not in close.columns:
+            continue
+        s = close[t].dropna()
+        if s.empty:
+            continue
+        idx = s.index
+        curr[t] = float(s.iloc[-1])
+        prev_1d[t] = float(s.iloc[-2]) if len(s) >= 2 else float("nan")
+        prev_1w[t] = float(s.iloc[-6]) if len(s) >= 6 else float(s.iloc[0])
+        prev_1m[t] = float(s.iloc[-22]) if len(s) >= 22 else float(s.iloc[0])
+
+        y0 = pd.Timestamp(year=y, month=1, day=1, tz=idx.tz) if idx.tz is not None else pd.Timestamp(year=y, month=1, day=1)
+        ytd_s = s[s.index >= y0]
+        start_ytd[t] = float(ytd_s.iloc[0]) if not ytd_s.empty else curr[t]
+
+        yoy_i = -252 if len(s) >= 252 else 0
+        start_yoy[t] = float(s.iloc[yoy_i])
+
     return {
-        "curr": curr, "prev_1d": prev_1d, "prev_1w": prev_1w, "prev_1m": prev_1m,
-        "ytd": start_ytd, "yoy": start_yoy
+        "curr": pd.Series(curr),
+        "prev_1d": pd.Series(prev_1d),
+        "prev_1w": pd.Series(prev_1w),
+        "prev_1m": pd.Series(prev_1m),
+        "ytd": pd.Series(start_ytd),
+        "yoy": pd.Series(start_yoy),
     }
 
 h_data = get_header_data()
 
 def calc_perf(ticker, period_key):
-    return ((h_data['curr'][ticker] - h_data[period_key][ticker]) / h_data[period_key][ticker]) * 100
+    curr = h_data["curr"].get(ticker, float("nan"))
+    prev = h_data[period_key].get(ticker, float("nan"))
+    try:
+        c, p = float(curr), float(prev)
+    except (TypeError, ValueError):
+        return float("nan")
+    if math.isnan(c) or math.isnan(p) or p == 0:
+        return float("nan")
+    return ((c - p) / p) * 100
+
+
+def _pct_txt(val: float) -> str:
+    if val is None or (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+        return "—"
+    return f"{val:+.2f}%"
+
+
+def _perf_class(val: float) -> str:
+    if val > 0:
+        return "bb-pos"
+    if val < 0:
+        return "bb-neg"
+    return "bb-flat"
+
 
 def bb_fmt(ticker_label, ticker_sym):
     price = h_data['curr'][ticker_sym]
     p1d = calc_perf(ticker_sym, 'prev_1d')
     p1m = calc_perf(ticker_sym, 'prev_1m')
     pytd = calc_perf(ticker_sym, 'ytd')
-    
-    def color(val): return "#00FF00" if val > 0 else "#FF0000" if val < 0 else "#AAAAAA"
-    
+
     return f"""
-    <div style="margin-bottom: 6px; border-bottom: 1px solid #333; padding-bottom: 2px;">
-        <span style="font-family: Arial, sans-serif; font-weight: bold; font-size: 14px; color: #E0E0E0; display: inline-block; width: 65px;">{ticker_label}</span>
-        <span style="font-family: 'Courier New', monospace; font-size: 15px; color: #FFB100; display: inline-block; width: 85px; text-align: right;">{price:,.2f}</span>
-        <span style="font-family: 'Courier New', monospace; font-size: 12px; margin-left: 10px;">
-            1D: <span style="color: {color(p1d)}; font-weight: bold;">{p1d:+.2f}%</span> | 
-            1M: <span style="color: {color(p1m)};">{p1m:+.2f}%</span> | 
-            YTD: <span style="color: {color(pytd)};">{pytd:+.2f}%</span>
-        </span>
+    <div class="bb-terminal terminal-ticker-row" style="margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 6px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; white-space: nowrap;">
+            <span class="bb-label" style="font-size: 14px;">{ticker_label}</span>
+            <span class="bb-price" style="font-size: 16px;">{price:,.2f}</span>
+        </div>
+        <div style="font-size: 14px; margin-top: 4px; white-space: nowrap;">
+            <span class="{_perf_class(p1d)}">1D {_pct_txt(p1d)}</span>
+            <span class="bb-sep" style="margin: 0 5px;">·</span>
+            <span class="{_perf_class(p1m)}">1M {_pct_txt(p1m)}</span>
+            <span class="bb-sep" style="margin: 0 5px;">·</span>
+            <span class="{_perf_class(pytd)}">YTD {_pct_txt(pytd)}</span>
+        </div>
     </div>
     """
+
 
 def btc_fmt():
     btc = h_data['curr']['BTC-USD']
@@ -93,24 +142,50 @@ def btc_fmt():
     p1m = calc_perf('BTC-USD', 'prev_1m')
     pytd = calc_perf('BTC-USD', 'ytd')
     pyoy = calc_perf('BTC-USD', 'yoy')
-    
-    def color(val): return "#00FF00" if val > 0 else "#FF0000" if val < 0 else "#AAAAAA"
-    
+
     return f"""
-    <div style="font-family: Arial, sans-serif; font-size: 14px; color: #E0E0E0;">Current Price</div>
-    <div style="font-family: 'Courier New', monospace; font-size: 26px; font-weight: bold; color: #FFB100;">${btc:,.0f} <span style="font-size: 16px; color: {color(p1d)};">({p1d:+.2f}%)</span></div>
-    <div style="font-family: 'Courier New', monospace; font-size: 12px; margin-top: 8px; color: #AAAAAA;">
-        1W: <span style="color: {color(p1w)};">{p1w:+.2f}%</span> | 
-        1M: <span style="color: {color(p1m)};">{p1m:+.2f}%</span> | 
-        YTD: <span style="color: {color(pytd)};">{pytd:+.2f}%</span> | 
-        1Y: <span style="color: {color(pyoy)};">{pyoy:+.2f}%</span>
+    <div class="bb-terminal terminal-btc-block">
+        <div class="bb-muted" style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;">BTC / USD</div>
+        <div class="bb-price" style="font-size: 26px; line-height: 1.2; white-space: nowrap;">${btc:,.0f}</div>
+        <div style="font-size: 14px; margin-top: 5px; white-space: nowrap;">
+            <span class="{_perf_class(p1d)}">1D {_pct_txt(p1d)}</span>
+            <span class="bb-sep" style="margin: 0 5px;">·</span>
+            <span class="{_perf_class(p1w)}">1W {_pct_txt(p1w)}</span>
+            <span class="bb-sep" style="margin: 0 5px;">·</span>
+            <span class="{_perf_class(p1m)}">1M {_pct_txt(p1m)}</span>
+        </div>
+        <div style="font-size: 14px; margin-top: 3px; white-space: nowrap;">
+            <span class="{_perf_class(pytd)}">YTD {_pct_txt(pytd)}</span>
+            <span class="bb-sep" style="margin: 0 5px;">·</span>
+            <span class="{_perf_class(pyoy)}">1Y {_pct_txt(pyoy)}</span>
+        </div>
     </div>
     """
+
+
+def _ribbon_sub(text: str) -> None:
+    st.markdown(
+        f'<div class="bb-terminal"><p class="bb-ribbon-sub">{text}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def switchboard_card(page: str, title: str, blurb: str) -> None:
+    with st.container(border=True):
+        st.page_link(page, label=title, use_container_width=True)
+        st.caption(blurb)
+
 
 # --- 4. HEADER SECTION ---
 col_t1, col_t2 = st.columns([1, 1])
 with col_t1:
-    st.markdown(f"# 0-E-TERMINAL // {datetime.now().strftime('%d %b %Y')}")
+    st.markdown(
+        f"""<div class="bb-terminal" style="line-height:1.25;">
+        <span class="bb-hero-title">0-E-TERMINAL</span>
+        <span class="bb-hero-date" style="margin-left:8px;">// {datetime.now().strftime('%d %b %Y')}</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 with col_t2:
     vix_val = h_data['curr']['^VIX']
     vix_pct = calc_perf('^VIX', 'prev_1d')
@@ -119,46 +194,56 @@ with col_t2:
     daily_implied = vix_val / math.sqrt(256)
     monthly_implied = vix_val / math.sqrt(12)
     
-    vix_color = "#00FF00" if vix_pct >= 0 else "#FF0000"
-    
+    vix_chg_cls = _perf_class(vix_pct)
+
     st.markdown(f"""
-    <div style="text-align: right; margin-top: 10px;">
-        <div style="font-family: Arial, sans-serif; font-size: 20px; font-weight: bold; color: #E0E0E0;">
-            VIX: <span style="font-family: 'Courier New', monospace; color: #FFB100; font-size: 24px;">{vix_val:.2f}</span> 
-            <span style="font-family: 'Courier New', monospace; color: {vix_color}; font-size: 18px;">({vix_pct:+.2f}%)</span>
+    <div class="bb-terminal" style="text-align: right; margin-top: 6px;">
+        <div style="font-size: 17px; white-space: nowrap;">
+            <span class="bb-vix-tag">VIX</span>
+            <span class="bb-price" style="font-size: 22px; margin-left: 6px;">{vix_val:.2f}</span>
+            <span class="{vix_chg_cls}" style="font-size: 16px;"> ({vix_pct:+.2f}%)</span>
         </div>
-        <div style="font-family: 'Courier New', monospace; font-size: 13px; color: #AAAAAA; margin-top: 5px;">
-            Daily Implied Move: <span style="color: #00BFFF; font-weight: bold;">{daily_implied:.2f}%</span> | 
-            30-Day Implied Move: <span style="color: #00BFFF; font-weight: bold;">{monthly_implied:.2f}%</span>
+        <div class="bb-muted" style="font-size: 14px; margin-top: 5px; white-space: nowrap;">
+            DAILY σ <span class="bb-cyan">{daily_implied:.2f}%</span>
+            <span class="bb-sep" style="margin: 0 6px;">·</span>
+            30D σ <span class="bb-cyan">{monthly_implied:.2f}%</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 # Ticker Ribbon
 st.markdown("---")
-c1, c2, c3, c4 = st.columns([1.2, 1.2, 1, 0.6])
+st.markdown(
+    '<h3 class="bb-switchboard-section">MARKETS</h3>',
+    unsafe_allow_html=True,
+)
+c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.15, 0.55])
 
 with c1:
-    st.markdown("**MACRO INDICES**")
+    _ribbon_sub("Indices")
     st.markdown(bb_fmt("S&P 500", "^GSPC"), unsafe_allow_html=True)
     st.markdown(bb_fmt("NASDAQ", "^IXIC"), unsafe_allow_html=True)
     st.markdown(bb_fmt("DOW", "^DJI"), unsafe_allow_html=True)
     st.markdown(bb_fmt("CRUDE", "CL=F"), unsafe_allow_html=True)
 
 with c2:
-    st.markdown("**FUTURES MARKET**")
+    _ribbon_sub("Futures")
     st.markdown(bb_fmt("ES1!", "ES=F"), unsafe_allow_html=True)
     st.markdown(bb_fmt("NQ1!", "NQ=F"), unsafe_allow_html=True)
 
 with c3:
-    st.markdown("**BITCOIN (BTC)**")
+    _ribbon_sub("Bitcoin")
     st.markdown(btc_fmt(), unsafe_allow_html=True)
 
 with c4:
-    st.markdown("**SYS.TIME**")
-    # Fixed the deprecated datetime warning here:
-    st.markdown(f"UTC: {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
-    st.markdown("FEED: <span style='color:#00FF00;'>ACTIVE</span>", unsafe_allow_html=True)
+    _ribbon_sub("Sys.time")
+    st.markdown(
+        f"""<div class="bb-terminal">
+        <p class="bb-label" style="font-size:14px; margin:0 0 6px 0;">UTC: {datetime.now(timezone.utc).strftime('%H:%M:%S')}</p>
+        <p style="font-size:14px; margin:0;"><span class="bb-muted">FEED:</span> <span class="bb-pos">ACTIVE</span></p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 st.markdown("---")
 
@@ -166,76 +251,88 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown("### [A] SYSTEMIC INPUTS")
-    st.markdown("""
-        <a href="01-macro-bonds" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[01] Macro Bond Watch</h4>
-                <p>The cost of money. Treasury curve and spread dynamics.</p>
-            </div>
-        </a>
-        <a href="02-inflation" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[02] Inflation</h4>
-                <p>The rate of debasement. CPI, PPI, and breakevens.</p>
-            </div>
-        </a>
-        <a href="03-liquidity" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[03] Liquidity</h4>
-                <p>The systemic money flow. Fed Balance Sheet & Repo.</p>
-            </div>
-        </a>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<h3 class="bb-switchboard-section">[A] SYSTEMIC INPUTS</h3>',
+        unsafe_allow_html=True,
+    )
+    for path, title, blurb in (
+        (
+            "pages/01-macro-bonds.py",
+            "[01] Macro Bond Watch",
+            "The cost of money. Treasury curve and spread dynamics.",
+        ),
+        (
+            "pages/02-inflation.py",
+            "[02] Inflation",
+            "The rate of debasement. CPI, PPI, and breakevens.",
+        ),
+        (
+            "pages/03-liquidity.py",
+            "[03] Liquidity",
+            "The systemic money flow. Fed Balance Sheet & Repo.",
+        ),
+    ):
+        switchboard_card(path, title, blurb)
 
 with col2:
-    st.markdown("### [B] RISK & EQUITY FLOW")
-    st.markdown("""
-        <a href="05-global-markets" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[05] Global Markets</h4>
-                <p>Cross-border liquidity and FX correlations.</p>
-            </div>
-        </a>
-        <a href="08-market-heatmap" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[08] Market Heatmap</h4>
-                <p>The daily vibe check. Breadth and immediate price action.</p>
-            </div>
-        </a>
-        <a href="09-sectors" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[09] Sectors</h4>
-                <p>Capital rotation matrices and internal breadth.</p>
-            </div>
-        </a>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<h3 class="bb-switchboard-section">[B] RISK & EQUITY FLOW</h3>',
+        unsafe_allow_html=True,
+    )
+    for path, title, blurb in (
+        (
+            "pages/05-global-markets.py",
+            "[05] Global Markets",
+            "Cross-border liquidity and FX correlations.",
+        ),
+        (
+            "pages/08-market-heatmap.py",
+            "[08] Market Heatmap",
+            "Breadth, internals, and immediate price action.",
+        ),
+        (
+            "pages/09-sectors.py",
+            "[09] Sectors",
+            "Capital rotation and internal equity breadth.",
+        ),
+        (
+            "pages/11-options-flow.py",
+            "[11] Options Flow",
+            "Unusual activity, sweeps, and flow versus spot.",
+        ),
+    ):
+        switchboard_card(path, title, blurb)
 
 with col3:
-    st.markdown("### [C] HARD ASSETS & ALPHA")
-    st.markdown("""
-        <a href="04-crypto" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[04] Crypto Terminal</h4>
-                <p>Digital beta. Correlation to DXY and local BTC liquidity.</p>
-            </div>
-        </a>
-        <a href="06-metals" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[06] Metals</h4>
-                <p>Growth/Fear barometer. Gold, Silver, and Copper flows.</p>
-            </div>
-        </a>
-        <a href="07-energy" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[07] Energy</h4>
-                <p>The global input cost. Oil, Gas, and Refined Products.</p>
-            </div>
-        </a>
-        <a href="10-positioning" target="_self" style="text-decoration: none; color: inherit;">
-            <div class="menu-card">
-                <h4>[10] Positioning & Options Flow</h4>
-                <p>Dealer Gamma, Volatility Triggers, and Whale sweeps.</p>
-            </div>
-        </a>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<h3 class="bb-switchboard-section">[C] HARD ASSETS & ALPHA</h3>',
+        unsafe_allow_html=True,
+    )
+    for path, title, blurb in (
+        (
+            "pages/04-crypto.py",
+            "[04] Crypto Terminal",
+            "Digital beta. Correlation to DXY and local BTC liquidity.",
+        ),
+        (
+            "pages/06-metals.py",
+            "[06] Metals",
+            "Growth/Fear barometer. Gold, Silver, and Copper flows.",
+        ),
+        (
+            "pages/07-energy.py",
+            "[07] Energy",
+            "The global input cost. Oil, Gas, and Refined Products.",
+        ),
+        (
+            "pages/10-positioning.py",
+            "[10] Positioning",
+            "Crowding, CTA/dealer context, and net exposure.",
+        ),
+        (
+            "pages/12-options-analyzer.py",
+            "[12] Options Analyzer",
+            "Structures, greeks, and scenario tools for single names.",
+        ),
+    ):
+        switchboard_card(path, title, blurb)

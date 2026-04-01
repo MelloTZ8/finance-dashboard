@@ -259,7 +259,8 @@ with tab1:
         actual_snap_date = raw_data.index[closest_snap_idx]
         
         # Calculate how many days ago this is
-        days_ago = len(raw_data.loc[actual_snap_date:last_date]) - 1
+        # Convert to Timestamp to avoid the deprecation warning
+        days_ago = len(raw_data.loc[pd.Timestamp(actual_snap_date):pd.Timestamp(last_date)]) - 1
         day_text = "Today" if days_ago == 0 else f"{days_ago} Trading Days Ago"
         st.markdown(f"**Locked Date:** {actual_snap_date.strftime('%d/%m/%Y')} <span style='color:#FFB100;'>({day_text})</span>", unsafe_allow_html=True)
         

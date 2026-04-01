@@ -10,6 +10,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
+from utils import terminal_style
+
+terminal_style()
+
 
 # Go up one level to grab our master theme file
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

@@ -6,6 +6,9 @@ import pandas as pd
 import datetime
 import sys
 import os
+from utils import terminal_style
+
+terminal_style()
 
 # --- 1. PAGE CONFIG & SETUP ---
 st.set_page_config(page_title="TERMINAL: BOND WATCH", layout="wide")

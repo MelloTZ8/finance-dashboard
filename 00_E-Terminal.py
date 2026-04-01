@@ -3,9 +3,7 @@ import yfinance as yf
 import pandas as pd
 import math
 from datetime import datetime, timezone
-from utils import terminal_style
 
-terminal_style()
 # Assuming theme.py is in the same directory
 from theme import inject_custom_css
 

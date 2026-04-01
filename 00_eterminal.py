@@ -19,7 +19,7 @@ inject_custom_css()
 # We removed the manual page links to prevent redundant double-navigation.
 # Streamlit auto-generates the sidebar nav from the pages/ directory.
 with st.sidebar:
-    st.markdown("### ⚡ SYSTEM STATUS")
+    st.markdown("### ⚡ E-Terminal")
     st.markdown("---")
     st.markdown("SYS.STAT: <span style='color:#00FF00;'>ONLINE</span>", unsafe_allow_html=True)
 

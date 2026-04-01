@@ -2,6 +2,6 @@ streamlit
 pandas<2.2.0
 yfinance
 plotly
-pandas-datareader
+fredapi
 feedparser
 setuptools

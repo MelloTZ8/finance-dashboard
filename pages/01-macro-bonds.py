@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas_datareader.data as web
+from fredapi import Fred  # <--- NEW ENGINE
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
@@ -45,15 +45,25 @@ st.markdown("Tracking the Treasury curve and spread dynamics to front-run regime
 # --- 3. DATA LOADING ---
 @st.cache_data
 def load_data():
-    # 1. Grab your secret key from the "vault"
-    api_key = st.secrets["FRED_API_KEY"]
+    # Initialize the official FRED client using your secret key
+    fred = Fred(api_key=st.secrets["FRED_API_KEY"])
+    start = "1994-01-01" 
     
-    end = datetime.date.today()
-    start = datetime.date(1994, 1, 1) 
+    # Fetch the series directly
+    s_3m = fred.get_series('DGS3MO', observation_start=start)
+    s_2y = fred.get_series('DGS2', observation_start=start)
+    s_5y = fred.get_series('DGS5', observation_start=start)
+    s_10y = fred.get_series('DGS10', observation_start=start)
+    s_30y = fred.get_series('DGS30', observation_start=start)
     
-    tickers = ['DGS3MO', 'DGS2', 'DGS5', 'DGS10', 'DGS30']
-    df = web.DataReader(tickers, 'fred', start, end)
-    df.columns = ['3-Month', '2-Year', '5-Year', '10-Year', '30-Year']
+    # Bind them into a single DataFrame
+    df = pd.DataFrame({
+        '3-Month': s_3m,
+        '2-Year': s_2y,
+        '5-Year': s_5y,
+        '10-Year': s_10y,
+        '30-Year': s_30y
+    })
     
     df.dropna(inplace=True)
     

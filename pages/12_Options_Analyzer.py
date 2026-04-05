@@ -9,39 +9,12 @@ from datetime import datetime
 # Must be the first Streamlit command
 st.set_page_config(layout="wide", page_title="Options Strain Terminal")
 
-# --- BLOOMBERG TERMINAL CSS INJECTION ---
-bloomberg_css = """
-<style>
-    /* Backgrounds & Typography */
-    .stApp { background-color: #000000 !important; }
-    html, body, [class*="css"], [class*="st-"] {
-        font-family: 'Courier New', Courier, monospace !important;
-        color: #00FF00 !important;
-        font-size: 14px !important;
-    }
-    
-    /* Headers & Accents */
-    h1, h2, h3, h4, h5, h6, .st-emotion-cache-10trblm {
-        color: #FFB100 !important;
-        text-transform: uppercase !important;
-        border-bottom: 2px solid #333333 !important;
-        padding-bottom: 5px;
-        margin-bottom: 10px;
-    }
-    
-    /* Input Fields */
-    div[data-baseweb="input"] > div {
-        background-color: #0a0a0a !important;
-        border: 1px solid #333333 !important;
-    }
-    input { color: #00FF00 !important; font-weight: bold; }
-    
-    /* Hide Streamlit Branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-</style>
-"""
-st.markdown(bloomberg_css, unsafe_allow_html=True)
+# --- THEME IMPORT ---
+try:
+    from theme import inject_custom_css
+    inject_custom_css()
+except ImportError:
+    st.warning("theme.py not found. Please ensure it is in the same directory.")
 # ----------------------------------------
 
 st.title("📊 Volatility Skew & Strain Terminal")

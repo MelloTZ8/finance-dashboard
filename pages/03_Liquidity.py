@@ -132,10 +132,16 @@ def fetch_data(ticker, start_date, end_date):
             return df[['SPREAD']].dropna()
             
         if ticker == "BUFFETT":
-            df_w = get_fred('WILL5000PR') # Pull Wilshire 5000 cleanly from FRED
+            # Pull Wilshire 5000 and GDP directly from FRED
+            df_w = get_fred('WILL5000PR') 
             df_gdp = get_fred('GDP')
+            
             if df_w is not None and df_gdp is not None:
-                df = df_w.join(df_gdp, how='outer').ffill().dropna()
+                # Resample quarterly GDP to daily and forward fill so the join works perfectly
+                df_gdp_daily = df_gdp.resample('D').ffill()
+                # Inner join aligns trading days
+                df = df_w.join(df_gdp_daily, how='inner').dropna()
+                # Wilshire index points loosely equal Billions in market cap. GDP is in Billions.
                 df['BUFFETT'] = (df['WILL5000PR'] / df['GDP']) * 100
                 return df[['BUFFETT']]
             return None
@@ -143,8 +149,6 @@ def fetch_data(ticker, start_date, end_date):
         df = get_fred(ticker)
         if df is not None:
             df = df.ffill()
-            # WRESBAL (Reserves), WTREGEN (TGA), WALCL (Total Assets) are in Millions. Div by 1000 = Billions.
-            # RRPONTSYD is natively in Billions. It gets ignored here to plot cleanly on the same axis.
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
             return df
@@ -470,13 +474,17 @@ def render_buffett_indicator():
     fig = go.Figure()
     
     if df is not None and not df.empty:
+        # Calculate mathematical standard deviations dynamically
         mean_val = df['BUFFETT'].mean()
+        std_val = df['BUFFETT'].std()
+        
         fig.add_trace(go.Scatter(x=df.index, y=df['BUFFETT'], name="Wilshire 5000 / GDP", mode='lines', line=dict(color="#00BFFF", width=2)))
         
-        fig.add_hline(y=mean_val + 60, line_dash="dot", line_color="#FF0000", annotation_text="+2σ (+60%) SEVERE OVERVALUATION")
-        fig.add_hline(y=mean_val + 30, line_dash="dash", line_color="#FFB100", annotation_text="+1σ (+30%) OVERVALUED")
-        fig.add_hline(y=mean_val - 30, line_dash="dash", line_color="#FFB100", annotation_text="-1σ (-30%) UNDERVALUED")
-        fig.add_hline(y=mean_val - 60, line_dash="dot", line_color="#00FF00", annotation_text="-2σ (-60%) DEEP VALUE")
+        # Plot precise +1σ and +2σ mathematical bands
+        fig.add_hline(y=mean_val + (2 * std_val), line_dash="dot", line_color="#FF0000", annotation_text="+2σ SEVERE OVERVALUATION")
+        fig.add_hline(y=mean_val + std_val, line_dash="dash", line_color="#FFB100", annotation_text="+1σ OVERVALUED")
+        fig.add_hline(y=mean_val - std_val, line_dash="dash", line_color="#FFB100", annotation_text="-1σ UNDERVALUED")
+        fig.add_hline(y=mean_val - (2 * std_val), line_dash="dot", line_color="#00FF00", annotation_text="-2σ DEEP VALUE")
         
     fig.update_layout(**get_base_layout("🇺🇸 THE BUFFETT INDICATOR (TOTAL MARKET CAP TO GDP)"))
     fig.update_yaxes(title_text="Ratio (%)", side="right", showgrid=True, gridcolor="#333333", tickfont=dict(color="#00FF00", family="Courier New"))
@@ -551,5 +559,5 @@ with tab3:
         st.markdown("""
         * **REAL-TIME SAHM RULE RECESSION INDICATOR:** Developed by former Federal Reserve economist Claudia Sahm, this is one of the most historically accurate, real-time indicators of an active macroeconomic recession. It triggers when the three-month moving average of the national unemployment rate rises by 0.50 percentage points or more relative to its lowest point during the previous 12 months. Unlike traditional GDP data which lags by quarters, the Sahm Rule fires in real-time. Red markers indicate exactly when historical recessions officially began according to this metric.
         
-        * **THE BUFFETT INDICATOR (TOTAL MARKET CAP TO GDP):** Famously described by Warren Buffett as "probably the best single measure of where valuations stand at any given moment," this macroeconomic gauge compares the total value of all publicly traded US companies (proxied here using the Wilshire 5000 Price Index) against the total Gross Domestic Product of the United States. The engine dynamically calculates the historical mean and projects rigid Standard Deviation (σ) thresholds. Readings pushing above +1σ (+30%) signal overvaluation, while prints hitting the +2σ (+60%) red line historically precede massive structural bear markets and "lost decades" in equity returns.
+        * **THE BUFFETT INDICATOR (TOTAL MARKET CAP TO GDP):** Famously described by Warren Buffett as "probably the best single measure of where valuations stand at any given moment," this macroeconomic gauge compares the total value of all publicly traded US companies (proxied here using the Wilshire 5000 Price Index) against the total Gross Domestic Product of the United States. The engine dynamically calculates the historical mean and projects rigid Standard Deviation (σ) thresholds. Readings pushing above +1σ signal overvaluation, while prints hitting the +2σ red line historically precede massive structural bear markets and "lost decades" in equity returns.
         """)

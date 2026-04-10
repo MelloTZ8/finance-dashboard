@@ -42,113 +42,125 @@ fred = Fred(api_key=FRED_API_KEY) if Fred and FRED_API_KEY else None
 # HELPER FUNCTIONS & DATA FETCHING (BULLETPROOFED)
 # ==========================================
 
-# Temporarily dropping ttl=3600 to force a hard cache reset
-@st.cache_data
-def fetch_data(ticker, start_date, end_date):
-    """Fetches data with automatic fallback if API keys fail."""
+# Renamed to force Streamlit to bust the old broken cache
+@st.cache_data(ttl=3600)
+def fetch_macro_data(ticker, start_date, end_date):
+    """Fetches data with a 90-day buffer to ensure forward-fills never fail on start dates."""
     
-    start_str = start_date.strftime('%Y-%m-%d')
+    # 90-day buffer prevents dropna() from wiping out charts on their exact inception dates
+    buffer_date = start_date - datetime.timedelta(days=90)
+    buffer_str = buffer_date.strftime('%Y-%m-%d')
     end_str = end_date.strftime('%Y-%m-%d')
 
     # --- 1. YFINANCE ROUTING ---
     if ticker in ["^GSPC", "SP500_YOY", "SP500_DRAWDOWN", "SP500_THOUSANDS", "SP500_MOM"] and yf is not None:
         try:
-            df = yf.download("^GSPC", start=start_date, end=end_date)
+            df = yf.download("^GSPC", start=buffer_date, end=end_date)
             if df.empty: return None
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
                 
-            # Strip timezones to prevent merge crashes
             df.index = pd.to_datetime(df.index).tz_localize(None)
                 
-            if ticker == "^GSPC": return df[['Close']].rename(columns={'Close': '^GSPC'})
-            if ticker == "SP500_THOUSANDS":
+            if ticker == "^GSPC": df = df[['Close']].rename(columns={'Close': '^GSPC'})
+            elif ticker == "SP500_THOUSANDS":
                 df['SP500_THOUSANDS'] = df['Close'] / 1000
-                return df[['SP500_THOUSANDS']]
-            if ticker == "SP500_YOY":
+                df = df[['SP500_THOUSANDS']]
+            elif ticker == "SP500_YOY":
                 df['SP500_YOY'] = df['Close'].pct_change(252) * 100
-                return df[['SP500_YOY']].dropna()
-            if ticker == "SP500_MOM":
+                df = df[['SP500_YOY']].dropna()
+            elif ticker == "SP500_MOM":
                 df['SP500_MOM'] = df['Close'].pct_change(21) * 100 
-                return df[['SP500_MOM']].dropna()
-            if ticker == "SP500_DRAWDOWN":
+                df = df[['SP500_MOM']].dropna()
+            elif ticker == "SP500_DRAWDOWN":
                 df['High'] = df['Close'].cummax()
                 df['SP500_DRAWDOWN'] = ((df['Close'] - df['High']) / df['High']) * 100
-                return df[['SP500_DRAWDOWN']].dropna()
+                df = df[['SP500_DRAWDOWN']].dropna()
+                
+            # Slice off the buffer so the chart perfectly matches the slider
+            return df[df.index >= pd.to_datetime(start_date)]
         except Exception:
             return None
 
     # --- 2. DUAL-ENGINE FRED ROUTING ---
     def get_fred(t):
         d = None
-        # Engine A: Try official API
         if fred is not None:
             try:
-                s = fred.get_series(t, observation_start=start_str, observation_end=end_str)
+                s = fred.get_series(t, observation_start=buffer_str, observation_end=end_str)
                 d = pd.DataFrame(s, columns=[t])
             except Exception:
                 pass
         
-        # Engine B: Fallback to pandas_datareader if API fails (bad key, etc.)
         if d is None and web is not None:
             try:
-                d = web.DataReader(t, 'fred', start_str, end_str)
+                d = web.DataReader(t, 'fred', buffer_str, end_str)
             except Exception:
                 pass
                 
-        # Clean index
         if d is not None and not d.empty:
             d.index = pd.to_datetime(d.index).tz_localize(None)
             return d
         return None
 
     try:
-        # Spread calculations using outer joins to prevent missing holiday data
+        # Spreads use outer joins and ffill to bridge holiday mismatches, then dropna
         if ticker == "SOFR_IORB_SPREAD":
             df_sofr = get_fred('SOFR')
             df_iorb = get_fred('IORB')
             df = df_sofr.join(df_iorb, how='outer').ffill()
             df['SPREAD'] = df['SOFR'] - df['IORB']
-            return df[['SPREAD']].dropna()
+            df = df[['SPREAD']].dropna()
+            return df[df.index >= pd.to_datetime(start_date)]
             
         if ticker == "BB_10Y_SPREAD":
             df_bb = get_fred('BAMLH0A1HYBBEY')
             df_10y = get_fred('DGS10')
             df = df_bb.join(df_10y, how='outer').ffill()
             df['SPREAD'] = df['BAMLH0A1HYBBEY'] - df['DGS10']
-            return df[['SPREAD']].dropna()
+            df = df[['SPREAD']].dropna()
+            return df[df.index >= pd.to_datetime(start_date)]
 
         if ticker == "CP_SPREAD":
             df_cp = get_fred('CPN3M')
             df_tb = get_fred('DTB3')
             df = df_cp.join(df_tb, how='outer').ffill()
             df['SPREAD'] = df['CPN3M'] - df['DTB3']
-            return df[['SPREAD']].dropna()
+            df = df[['SPREAD']].dropna()
+            return df[df.index >= pd.to_datetime(start_date)]
             
         if ticker == "CORP_10Y_SPREAD":
             df_corp = get_fred('HQMCB10YR')
             df_tsy = get_fred('DGS10')
             df = df_corp.join(df_tsy, how='outer').ffill()
             df['SPREAD'] = df['HQMCB10YR'] - df['DGS10']
-            return df[['SPREAD']].dropna()
+            df = df[['SPREAD']].dropna()
+            return df[df.index >= pd.to_datetime(start_date)]
             
         if ticker == "BUFFETT":
-            df_w = get_fred('WILL5000PR') # Pull Wilshire 5000 cleanly from FRED
-            df_gdp = get_fred('GDP')
-            if df_w is not None and df_gdp is not None:
-                df = df_w.join(df_gdp, how='outer').ffill().dropna()
-                df['BUFFETT'] = (df['WILL5000PR'] / df['GDP']) * 100
-                return df[['BUFFETT']]
+            # Revert to YFinance for Wilshire 5000 because FRED discontinued WILL5000PR
+            if yf is not None:
+                df_w = yf.download("^W5000", start=buffer_date, end=end_date)
+                if isinstance(df_w.columns, pd.MultiIndex):
+                    df_w.columns = df_w.columns.get_level_values(0)
+                df_w = df_w[['Close']].rename(columns={'Close': 'W5000'})
+                df_w.index = pd.to_datetime(df_w.index).tz_localize(None)
+                
+                df_gdp = get_fred('GDP')
+                if df_gdp is not None:
+                    df_gdp_daily = df_gdp.resample('D').ffill()
+                    df = df_w.join(df_gdp_daily, how='inner').dropna()
+                    df['BUFFETT'] = (df['W5000'] / df['GDP']) * 100
+                    return df[df.index >= pd.to_datetime(start_date)][['BUFFETT']]
             return None
 
+        # Standard single metrics
         df = get_fred(ticker)
         if df is not None:
-            df = df.ffill()
-            # WRESBAL (Reserves), WTREGEN (TGA), WALCL (Total Assets) are in Millions. Div by 1000 = Billions.
-            # RRPONTSYD is natively in Billions. It gets ignored here to plot cleanly on the same axis.
+            df = df.ffill().dropna()
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
-            return df
+            return df[df.index >= pd.to_datetime(start_date)]
             
     except Exception:
         return None
@@ -189,7 +201,7 @@ def build_advanced_chart(title, start_date, end_date, series_configs, y1_label="
         y_axis = config.get("axis", "y1")
         axis_tag = " (L1)" if has_dual_axis and y_axis == "y1" else " (R1)"
             
-        df = fetch_data(ticker, start_date, end_date) if ticker else None
+        df = fetch_macro_data(ticker, start_date, end_date) if ticker else None
         if df is not None and not df.empty:
             y_data, x_data = df.iloc[:, 0], df.index
         else:
@@ -223,8 +235,8 @@ def render_banking_stress_aligned():
     min_date = datetime.date(2021, 7, 29) # SOFR-IORB exact start date
     start_date, end_date = st.slider("📅 LOOKBACK: Banking Stress", min_value=min_date, max_value=today, value=(min_date, today), format="YYYY-MM-DD", key="slider_sofr", label_visibility="collapsed")
     
-    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
-    df_sofr = fetch_data("SOFR_IORB_SPREAD", start_date, end_date)
+    df_dd = fetch_macro_data("SP500_DRAWDOWN", start_date, end_date)
+    df_sofr = fetch_macro_data("SOFR_IORB_SPREAD", start_date, end_date)
     
     fig = go.Figure()
     
@@ -253,8 +265,8 @@ def render_stlfsi_aligned():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: St. Louis Fed FSI", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_stlfsi", label_visibility="collapsed")
     
-    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
-    df_st = fetch_data("STLFSI4", start_date, end_date)
+    df_dd = fetch_macro_data("SP500_DRAWDOWN", start_date, end_date)
+    df_st = fetch_macro_data("STLFSI4", start_date, end_date)
     
     fig = go.Figure()
     
@@ -283,9 +295,9 @@ def render_liquidity_funnel_aligned():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Liquidity Funnel", min_value=(today - datetime.timedelta(days=20*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_funnel", label_visibility="collapsed")
     
-    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
-    df_cp = fetch_data("CP_SPREAD", start_date, end_date)
-    df_corp = fetch_data("CORP_10Y_SPREAD", start_date, end_date)
+    df_dd = fetch_macro_data("SP500_DRAWDOWN", start_date, end_date)
+    df_cp = fetch_macro_data("CP_SPREAD", start_date, end_date)
+    df_corp = fetch_macro_data("CORP_10Y_SPREAD", start_date, end_date)
     
     fig = go.Figure()
     
@@ -311,7 +323,7 @@ def render_ccbs_aligned_chart():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Cross-Currency", min_value=(today - datetime.timedelta(days=20*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_ccbs", label_visibility="collapsed")
     
-    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
+    df_dd = fetch_macro_data("SP500_DRAWDOWN", start_date, end_date)
     
     df_eur = generate_deterministic_dummy("eur", start_date, end_date, base_val=-15)
     df_jpy = generate_deterministic_dummy("jpy", start_date, end_date, base_val=-25)
@@ -360,8 +372,8 @@ def render_ccbs_aligned_chart():
 def render_baa_aligned_chart(title, unique_key):
     today = datetime.date.today()
     start_date, end_date = st.slider(f"📅 LOOKBACK: {title}", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key=f"slider_{unique_key}", label_visibility="collapsed")
-    df_sp = fetch_data("SP500_YOY", start_date, end_date)
-    df_baa = fetch_data("BAA10Y", start_date, end_date) 
+    df_sp = fetch_macro_data("SP500_YOY", start_date, end_date)
+    df_baa = fetch_macro_data("BAA10Y", start_date, end_date) 
     fig = go.Figure()
     
     if df_sp is not None and not df_sp.empty:
@@ -394,8 +406,8 @@ def render_junk_aligned_chart(title, unique_key):
     today = datetime.date.today()
     start_date, end_date = st.slider(f"📅 LOOKBACK: {title}", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key=f"slider_{unique_key}", label_visibility="collapsed")
     
-    df_sp = fetch_data("SP500_YOY", start_date, end_date)
-    df_bb = fetch_data("BB_10Y_SPREAD", start_date, end_date)
+    df_sp = fetch_macro_data("SP500_YOY", start_date, end_date)
+    df_bb = fetch_macro_data("BB_10Y_SPREAD", start_date, end_date)
     fig = go.Figure()
     
     if df_sp is not None and not df_sp.empty:
@@ -426,7 +438,7 @@ def render_credit_basis_monitor():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Credit Basis Monitor", min_value=(today - datetime.timedelta(days=20*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_cds", label_visibility="collapsed")
     
-    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
+    df_dd = fetch_macro_data("SP500_DRAWDOWN", start_date, end_date)
     fig = go.Figure()
 
     if df_dd is not None and not df_dd.empty:
@@ -467,7 +479,7 @@ def render_buffett_indicator():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Buffett Indicator", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=10*365), today), format="YYYY-MM-DD", key="slider_buffett", label_visibility="collapsed")
     
-    df = fetch_data("BUFFETT", start_date, end_date)
+    df = fetch_macro_data("BUFFETT", start_date, end_date)
     fig = go.Figure()
     
     if df is not None and not df.empty:
@@ -488,7 +500,7 @@ def render_buffett_indicator():
 def render_sahm_rule():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Sahm Rule", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=10*365), today), format="YYYY-MM-DD", key="slider_sahm", label_visibility="collapsed")
-    df = fetch_data("SAHMREALTIME", start_date, end_date)
+    df = fetch_macro_data("SAHMREALTIME", start_date, end_date)
     fig = go.Figure()
     if df is not None and not df.empty:
         fig.add_trace(go.Scatter(x=df.index, y=df['SAHMREALTIME'], name="Sahm Rule (R1)", mode='lines', line=dict(color="#00FF00", width=1.5)))

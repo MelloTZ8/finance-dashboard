@@ -243,6 +243,7 @@ with col1:
     switchboard_card("pages/01_Macro_Bonds.py", "Macro Bond Watch", "The cost of money. Treasury curve and spread dynamics.")
     switchboard_card("pages/02_Inflation.py", "Inflation", "The rate of debasement. CPI, PPI, and breakevens.")
     switchboard_card("pages/03_Liquidity.py", "Liquidity", "The systemic money flow. Fed Balance Sheet & Repo.")
+    switchboard_card("pages/13_Labor_Consumer.py", "Labor & Consumer", "The end of the conveyor belt. Employment, JOLTS, and consumer health.")
 
 with col2:
     st.markdown('<h3 class="bb-switchboard-section">[B] RISK & EQUITY FLOW</h3>', unsafe_allow_html=True)

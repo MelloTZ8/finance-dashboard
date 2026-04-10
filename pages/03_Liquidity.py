@@ -124,8 +124,7 @@ def fetch_data(ticker, start_date, end_date):
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
             return df
-        except Exception as e:
-            # st.error(f"FRED API Error for {ticker}: {e}") # Uncomment to debug specific API failures
+        except Exception:
             return None
     return None
 
@@ -181,7 +180,7 @@ def build_advanced_chart(title, start_date, end_date, series_configs, y1_label="
         layout_args['yaxis'] = dict(title=y2_label if y2_label else y1_label, side="right", showgrid=True, gridcolor="#333333", tickfont=dict(color="#00FF00", family="Courier New"))
 
     fig.update_layout(**layout_args)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_chart_with_slider(title, series_configs, unique_key, y1_label="", y2_label="", min_date_override=None):
     today = datetime.date.today()
@@ -222,7 +221,7 @@ def render_banking_stress_aligned():
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Spread (bps)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[sofr_min - pad, sofr_max + pad], tickfont=dict(color="#00FF00", family="Courier New"))
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_stlfsi_aligned():
     today = datetime.date.today()
@@ -252,7 +251,7 @@ def render_stlfsi_aligned():
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Stress Index", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[st_min - pad, st_max + pad], tickfont=dict(color="#FF3333", family="Courier New"))
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_liquidity_funnel_aligned():
     today = datetime.date.today()
@@ -280,7 +279,7 @@ def render_liquidity_funnel_aligned():
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[l_min_dev, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Spread (%)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", tickfont=dict(color="#FFB100", family="Courier New"))
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_ccbs_aligned_chart():
     today = datetime.date.today()
@@ -312,7 +311,7 @@ def render_ccbs_aligned_chart():
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min * 1.05, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Basis (bps)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[basis_min_main - pad_main, basis_max_main + pad_main], tickfont=dict(color="#00FF00", family="Courier New"))
     )
-    st.plotly_chart(fig_main, use_container_width=True)
+    st.plotly_chart(fig_main, width='stretch')
 
     # --- SUB CHART (JPY ISOLATED) ---
     fig_sub = go.Figure()
@@ -330,7 +329,7 @@ def render_ccbs_aligned_chart():
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min * 1.05, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Basis (bps)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[basis_min_sub - pad_sub, basis_max_sub + pad_sub], tickfont=dict(color="#FFB100", family="Courier New"))
     )
-    st.plotly_chart(fig_sub, use_container_width=True)
+    st.plotly_chart(fig_sub, width='stretch')
 
 def render_baa_aligned_chart(title, unique_key):
     today = datetime.date.today()
@@ -363,7 +362,7 @@ def render_baa_aligned_chart(title, unique_key):
         yaxis2=dict(title="Yield Spread (%)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[3.0 - baa_max_dev, 3.0 + baa_max_dev], tickfont=dict(color="#FFB100", family="Courier New"))
     )
     fig.add_hline(y=3.0, line_dash="dash", line_color="#FFFFFF", annotation_text="3% CRITICAL SPREAD", yref="y2")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_junk_aligned_chart(title, unique_key):
     today = datetime.date.today()
@@ -395,7 +394,7 @@ def render_junk_aligned_chart(title, unique_key):
         yaxis=dict(title="S&P 500 YoY Change (%)", side="left", showgrid=False, range=[-sp_max_dev, sp_max_dev], tickfont=dict(color="#00BFFF", family="Courier New")),
         yaxis2=dict(title="Yield Spread (%)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[4.0 - bb_max_dev, 4.0 + bb_max_dev], tickfont=dict(color="#FF3333", family="Courier New"))
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_credit_basis_monitor():
     today = datetime.date.today()
@@ -436,7 +435,7 @@ def render_credit_basis_monitor():
     fig.add_hline(y=2.0, line_dash="dash", line_color="#FF0000", annotation_text="+2σ STRESS", yref="y2")
     fig.add_hline(y=-2.0, line_dash="dash", line_color="#00FF00", annotation_text="-2σ CALM", yref="y2")
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_buffett_indicator():
     today = datetime.date.today()
@@ -456,7 +455,7 @@ def render_buffett_indicator():
         
     fig.update_layout(**get_base_layout("🇺🇸 THE BUFFETT INDICATOR (TOTAL MARKET CAP TO GDP)"))
     fig.update_yaxes(title_text="Ratio (%)", side="right", showgrid=True, gridcolor="#333333", tickfont=dict(color="#00FF00", family="Courier New"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 def render_sahm_rule():
     today = datetime.date.today()
@@ -470,7 +469,7 @@ def render_sahm_rule():
     fig.add_hline(y=0.5, line_dash="dash", line_color="#FF0000", annotation_text="0.5% RECESSION THRESHOLD")
     fig.update_layout(**get_base_layout("📉 REAL-TIME SAHM RULE RECESSION INDICATOR", height=500))
     fig.update_yaxes(title_text="Percentage Points", side="right", showgrid=True, gridcolor="#333333", tickfont=dict(color="#00FF00", family="Courier New"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 # ==========================================
 # MAIN APP & TABS

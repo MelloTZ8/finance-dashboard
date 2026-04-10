@@ -9,9 +9,9 @@ from theme import inject_custom_css
 
 # Handle multiple data sources
 try:
-    import pandas_datareader.data as web
+    from fredapi import Fred
 except ImportError:
-    web = None
+    Fred = None
 try:
     import yfinance as yf
 except ImportError:
@@ -23,29 +23,32 @@ st.set_page_config(page_title="Liquidity & Systemic Stress", layout="wide")
 inject_custom_css()
 
 # ==========================================
-# HELPER FUNCTIONS & DATA FETCHING (BULLETPROOFED)
+# AUTHENTICATION
+# ==========================================
+# Replace this string with your actual FRED API key
+FRED_API_KEY = "YOUR_FRED_API_KEY_HERE" 
+fred = Fred(api_key=FRED_API_KEY) if Fred else None
+
+# ==========================================
+# HELPER FUNCTIONS & DATA FETCHING (OFFICIAL API)
 # ==========================================
 
 @st.cache_data(ttl=3600)
 def fetch_data(ticker, start_date, end_date):
-    """Fetches data from FRED or YFinance. Strips timezones to prevent join-failures."""
+    """Fetches data using official FRED API or YFinance."""
     
     # --- 1. YFINANCE ROUTING ---
-    if ticker in ["^GSPC", "SP500_YOY", "SP500_DRAWDOWN", "SP500_THOUSANDS", "SP500_MOM", "^W5000"] and yf is not None:
+    if ticker in ["^GSPC", "SP500_YOY", "SP500_DRAWDOWN", "SP500_THOUSANDS", "SP500_MOM"] and yf is not None:
         try:
-            t_symbol = "^W5000" if ticker == "^W5000" else "^GSPC"
-            df = yf.download(t_symbol, start=start_date, end=end_date)
+            df = yf.download("^GSPC", start=start_date, end=end_date)
             if df.empty: return None
-            
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
-            
-            # CRITICAL FIX: Strip timezone awareness so it can perfectly join with FRED data
-            if df.index.tz is not None:
+                
+            if getattr(df.index, 'tz', None) is not None:
                 df.index = df.index.tz_localize(None)
                 
             if ticker == "^GSPC": return df[['Close']].rename(columns={'Close': '^GSPC'})
-            if ticker == "^W5000": return df[['Close']].rename(columns={'Close': 'W5000'})
             if ticker == "SP500_THOUSANDS":
                 df['SP500_THOUSANDS'] = df['Close'] / 1000
                 return df[['SP500_THOUSANDS']]
@@ -62,19 +65,20 @@ def fetch_data(ticker, start_date, end_date):
         except Exception:
             return None
 
-    # --- 2. FRED ROUTING ---
-    if web is not None:
+    # --- 2. OFFICIAL FRED API ROUTING ---
+    if fred is not None:
         try:
+            # Helper to pull series and convert to DataFrame matching the old structure
             def get_fred(t):
-                d = web.DataReader(t, 'fred', start_date, end_date)
-                if d.index.tz is not None:
+                s = fred.get_series(t, observation_start=start_date, observation_end=end_date)
+                d = pd.DataFrame(s, columns=[t])
+                if getattr(d.index, 'tz', None) is not None:
                     d.index = d.index.tz_localize(None)
                 return d
-                
+
             if ticker == "SOFR_IORB_SPREAD":
                 df_sofr = get_fred('SOFR')
                 df_iorb = get_fred('IORB')
-                # CRITICAL FIX: Outer join prevents dropping data if one series misses a holiday
                 df = df_sofr.join(df_iorb, how='outer').ffill()
                 df['SPREAD'] = df['SOFR'] - df['IORB']
                 return df[['SPREAD']].dropna()
@@ -101,19 +105,27 @@ def fetch_data(ticker, start_date, end_date):
                 return df[['SPREAD']].dropna()
                 
             if ticker == "BUFFETT":
-                df_w = fetch_data("^W5000", start_date, end_date)
-                if df_w is None: return None
-                
-                df_gdp = get_fred('GDP').resample('D').ffill()
-                df = df_w.join(df_gdp, how='inner')
-                df['BUFFETT'] = (df['W5000'] / df['GDP']) * 100
-                return df[['BUFFETT']].dropna()
+                if yf is not None:
+                    df_w = yf.download("^W5000", start=start_date, end=end_date)
+                    if isinstance(df_w.columns, pd.MultiIndex):
+                        df_w.columns = df_w.columns.get_level_values(0)
+                    df_w = df_w[['Close']].rename(columns={'Close': 'W5000'})
+                    
+                    if getattr(df_w.index, 'tz', None) is not None:
+                        df_w.index = df_w.index.tz_localize(None)
+                    
+                    df_gdp = get_fred('GDP').resample('D').ffill()
+                    df = df_w.join(df_gdp, how='inner')
+                    df['BUFFETT'] = (df['W5000'] / df['GDP']) * 100
+                    return df[['BUFFETT']].dropna()
+                return None
 
             df = get_fred(ticker).ffill()
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
             return df
-        except Exception:
+        except Exception as e:
+            # st.error(f"FRED API Error for {ticker}: {e}") # Uncomment to debug specific API failures
             return None
     return None
 

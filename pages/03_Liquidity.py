@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 import datetime
 
+# Import your custom Bloomberg Theme
+from theme import inject_custom_css
+
 # Handle multiple data sources
 try:
     import pandas_datareader.data as web
@@ -16,26 +19,8 @@ except ImportError:
 
 st.set_page_config(page_title="Liquidity & Systemic Stress", layout="wide")
 
-# ==========================================
-# HARDCODED BLOOMBERG CSS THEME
-# ==========================================
-bloomberg_css = """
-<style>
-    .stApp { background-color: #000000; color: #00FF00; font-family: 'Courier New', Courier, monospace; font-size: 14px; }
-    h1, h2, h3, h4, h5, h6 { color: #FFB100 !important; font-family: 'Courier New', Courier, monospace !important; text-transform: uppercase; border-bottom: 1px solid #333333; padding-bottom: 5px; margin-bottom: 15px; }
-    .stTabs [data-baseweb="tab-list"] { gap: 2px; background-color: #0a0a0a; border-bottom: 1px solid #333333; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #0a0a0a; border-radius: 0px; color: #FFB100; font-weight: bold; border: 1px solid #333333; border-bottom: none; }
-    .stTabs [aria-selected="true"] { background-color: #000000; border-top: 3px solid #FFB100; color: #00FF00 !important; }
-    .stSlider [data-baseweb="slider"] { padding-top: 10px; }
-    .stSlider [data-baseweb="slider"] [role="slider"] { background-color: #000000 !important; border: 2px solid #00FF00 !important; border-radius: 0px !important; width: 14px !important; height: 20px !important; box-shadow: none !important; }
-    .stSlider [data-baseweb="slider"] > div:first-child > div:first-child { background: #FFB100 !important; }
-    p, span, div, li { color: #00FF00; font-family: 'Courier New', Courier, monospace; font-size: 14px; }
-    hr { border-color: #333333; }
-    .streamlit-expanderHeader { color: #FFB100 !important; background-color: #0a0a0a; border: 1px solid #333333; font-family: 'Courier New', Courier, monospace !important; }
-    .streamlit-expanderContent { border: 1px solid #333333; border-top: none; background-color: #000000; padding: 15px; }
-</style>
-"""
-st.markdown(bloomberg_css, unsafe_allow_html=True)
+# Inject the theme globally
+inject_custom_css()
 
 # ==========================================
 # HELPER FUNCTIONS & DATA FETCHING
@@ -184,6 +169,67 @@ def render_chart_with_slider(title, series_configs, unique_key, y1_label="", y2_
 # CUSTOM ALIGNMENT CHARTS
 # ==========================================
 
+def render_banking_stress_aligned():
+    today = datetime.date.today()
+    min_date = datetime.date(2021, 7, 29) # SOFR-IORB exact start date
+    start_date, end_date = st.slider("📅 LOOKBACK: Banking Stress", min_value=min_date, max_value=today, value=(min_date, today), format="YYYY-MM-DD", key="slider_sofr", label_visibility="collapsed")
+    
+    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
+    df_sofr = fetch_data("SOFR_IORB_SPREAD", start_date, end_date)
+    
+    fig = go.Figure()
+    
+    if df_dd is not None and not df_dd.empty:
+        fig.add_trace(go.Scatter(x=df_dd.index, y=df_dd['SP500_DRAWDOWN'], name="S&P 500 % From Highs (L1)", mode='lines', line=dict(color="rgba(255, 255, 255, 0.3)", width=2), yaxis="y1"))
+        sp_min = df_dd['SP500_DRAWDOWN'].min() * 1.05
+    else:
+        sp_min = -20
+        
+    if df_sofr is not None and not df_sofr.empty:
+        fig.add_trace(go.Scatter(x=df_sofr.index, y=df_sofr['SPREAD'], name="SOFR - IORB (R1)", mode='lines', line=dict(color="#00FF00", width=1.5), yaxis="y2"))
+        sofr_min = df_sofr['SPREAD'].min()
+        sofr_max = df_sofr['SPREAD'].max()
+        pad = (sofr_max - sofr_min) * 0.1 or 1
+    else:
+        sofr_min, sofr_max, pad = 0, 10, 1
+        
+    fig.update_layout(
+        **get_base_layout("🏦 BANKING STRESS (SOFR-IORB SPREAD VS S&P DRAWDOWNS)"),
+        yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
+        yaxis2=dict(title="Spread (bps)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[sofr_min - pad, sofr_max + pad], tickfont=dict(color="#00FF00", family="Courier New"))
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_stlfsi_aligned():
+    today = datetime.date.today()
+    start_date, end_date = st.slider("📅 LOOKBACK: St. Louis Fed FSI", min_value=(today - datetime.timedelta(days=40*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_stlfsi", label_visibility="collapsed")
+    
+    df_dd = fetch_data("SP500_DRAWDOWN", start_date, end_date)
+    df_st = fetch_data("STLFSI4", start_date, end_date)
+    
+    fig = go.Figure()
+    
+    if df_dd is not None and not df_dd.empty:
+        fig.add_trace(go.Scatter(x=df_dd.index, y=df_dd['SP500_DRAWDOWN'], name="S&P 500 % From Highs (L1)", mode='lines', line=dict(color="rgba(255, 255, 255, 0.3)", width=2), yaxis="y1"))
+        sp_min = df_dd['SP500_DRAWDOWN'].min() * 1.05
+    else:
+        sp_min = -20
+        
+    if df_st is not None and not df_st.empty:
+        fig.add_trace(go.Scatter(x=df_st.index, y=df_st['STLFSI4'], name="STLFSI4 (R1)", mode='lines', line=dict(color="#FF3333", width=1.5), yaxis="y2"))
+        st_min = df_st['STLFSI4'].min()
+        st_max = df_st['STLFSI4'].max()
+        pad = (st_max - st_min) * 0.1 or 0.5
+    else:
+        st_min, st_max, pad = -2, 5, 0.5
+        
+    fig.update_layout(
+        **get_base_layout("😨 ST. LOUIS FED FINANCIAL STRESS INDEX"),
+        yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
+        yaxis2=dict(title="Stress Index", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[st_min - pad, st_max + pad], tickfont=dict(color="#FF3333", family="Courier New"))
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 def render_liquidity_funnel_aligned():
     today = datetime.date.today()
     start_date, end_date = st.slider("📅 LOOKBACK: Liquidity Funnel", min_value=(today - datetime.timedelta(days=20*365)), max_value=today, value=(today - datetime.timedelta(days=2*365), today), format="YYYY-MM-DD", key="slider_funnel", label_visibility="collapsed")
@@ -233,14 +279,12 @@ def render_ccbs_aligned_chart():
     fig_main.add_trace(go.Scatter(x=df_eur.index, y=df_eur['value'], name="EUR/USD Basis (R1)", mode='lines', line=dict(color="#00FF00", width=1.5), yaxis="y2"))
     fig_main.add_trace(go.Scatter(x=df_gbp.index, y=df_gbp['value'], name="GBP/USD Basis (R1)", mode='lines', line=dict(color="#00CCFF", width=1.5), yaxis="y2"))
 
-    # Dynamic padding to maximize Y-axis usage
     basis_min_main = min(df_eur['value'].min(), df_gbp['value'].min())
     basis_max_main = max(df_eur['value'].max(), df_gbp['value'].max())
     pad_main = (basis_max_main - basis_min_main) * 0.1 or 5
 
     fig_main.update_layout(
         **get_base_layout("💱 CROSS-CURRENCY BASIS SWAPS: EUR & GBP", height=600),
-        # 0 strictly at the top, bottom perfectly hugs max drawdown
         yaxis=dict(title="S&P 500 % Drawdown", side="left", showgrid=False, range=[sp_min * 1.05, 0], tickfont=dict(color="rgba(255, 255, 255, 0.5)", family="Courier New")),
         yaxis2=dict(title="Basis (bps)", side="right", overlaying="y", showgrid=True, gridcolor="#333333", range=[basis_min_main - pad_main, basis_max_main + pad_main], tickfont=dict(color="#00FF00", family="Courier New"))
     )
@@ -413,8 +457,8 @@ tab1, tab2, tab3 = st.tabs(["🚰 1. LIQUIDITY", "⚠️ 2. CREDIT RISK", "🌍 
 
 # --- TAB 1: LIQUIDITY ---
 with tab1:
-    render_chart_with_slider("🏦 BANKING STRESS (SOFR-IORB SPREAD)", [{"ticker": "SOFR_IORB_SPREAD", "name": "SOFR - IORB", "color": "#00FF00"}], "sofr_iorb", y1_label="Spread (bps)", min_date_override=datetime.date(2021, 7, 29))
-    render_chart_with_slider("😨 ST. LOUIS FED FINANCIAL STRESS INDEX", [{"ticker": "STLFSI4", "name": "STLFSI4", "color": "#FF3333"}], "stlfsi", y1_label="Stress Index")
+    render_banking_stress_aligned()
+    render_stlfsi_aligned()
     
     render_ccbs_aligned_chart()
     render_liquidity_funnel_aligned()

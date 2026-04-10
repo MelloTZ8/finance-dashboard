@@ -23,21 +23,29 @@ st.set_page_config(page_title="Liquidity & Systemic Stress", layout="wide")
 inject_custom_css()
 
 # ==========================================
-# HELPER FUNCTIONS & DATA FETCHING
+# HELPER FUNCTIONS & DATA FETCHING (BULLETPROOFED)
 # ==========================================
 
 @st.cache_data(ttl=3600)
 def fetch_data(ticker, start_date, end_date):
-    """Fetches data from FRED or YFinance based on ticker rules."""
-    # YFINANCE ROUTING
-    if ticker in ["^GSPC", "SP500_YOY", "SP500_DRAWDOWN", "SP500_THOUSANDS", "SP500_MOM"] and yf is not None:
+    """Fetches data from FRED or YFinance. Strips timezones to prevent join-failures."""
+    
+    # --- 1. YFINANCE ROUTING ---
+    if ticker in ["^GSPC", "SP500_YOY", "SP500_DRAWDOWN", "SP500_THOUSANDS", "SP500_MOM", "^W5000"] and yf is not None:
         try:
-            df = yf.download("^GSPC", start=start_date, end=end_date)
+            t_symbol = "^W5000" if ticker == "^W5000" else "^GSPC"
+            df = yf.download(t_symbol, start=start_date, end=end_date)
             if df.empty: return None
+            
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
+            
+            # CRITICAL FIX: Strip timezone awareness so it can perfectly join with FRED data
+            if df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
                 
             if ticker == "^GSPC": return df[['Close']].rename(columns={'Close': '^GSPC'})
+            if ticker == "^W5000": return df[['Close']].rename(columns={'Close': 'W5000'})
             if ticker == "SP500_THOUSANDS":
                 df['SP500_THOUSANDS'] = df['Close'] / 1000
                 return df[['SP500_THOUSANDS']]
@@ -54,50 +62,54 @@ def fetch_data(ticker, start_date, end_date):
         except Exception:
             return None
 
-    # FRED ROUTING
+    # --- 2. FRED ROUTING ---
     if web is not None:
         try:
+            def get_fred(t):
+                d = web.DataReader(t, 'fred', start_date, end_date)
+                if d.index.tz is not None:
+                    d.index = d.index.tz_localize(None)
+                return d
+                
             if ticker == "SOFR_IORB_SPREAD":
-                df_sofr = web.DataReader('SOFR', 'fred', start_date, end_date)
-                df_iorb = web.DataReader('IORB', 'fred', start_date, end_date)
-                df = pd.DataFrame(index=df_sofr.index.join(df_iorb.index, how='inner'))
-                df['SPREAD'] = df_sofr['SOFR'] - df_iorb['IORB']
+                df_sofr = get_fred('SOFR')
+                df_iorb = get_fred('IORB')
+                # CRITICAL FIX: Outer join prevents dropping data if one series misses a holiday
+                df = df_sofr.join(df_iorb, how='outer').ffill()
+                df['SPREAD'] = df['SOFR'] - df['IORB']
                 return df[['SPREAD']].dropna()
                 
             if ticker == "BB_10Y_SPREAD":
-                df_bb = web.DataReader('BAMLH0A1HYBBEY', 'fred', start_date, end_date)
-                df_10y = web.DataReader('DGS10', 'fred', start_date, end_date)
-                df = pd.DataFrame(index=df_bb.index.join(df_10y.index, how='inner'))
-                df['SPREAD'] = df_bb['BAMLH0A1HYBBEY'] - df_10y['DGS10']
+                df_bb = get_fred('BAMLH0A1HYBBEY')
+                df_10y = get_fred('DGS10')
+                df = df_bb.join(df_10y, how='outer').ffill()
+                df['SPREAD'] = df['BAMLH0A1HYBBEY'] - df['DGS10']
                 return df[['SPREAD']].dropna()
 
             if ticker == "CP_SPREAD":
-                df_cp = web.DataReader('CPN3M', 'fred', start_date, end_date)
-                df_tb = web.DataReader('DTB3', 'fred', start_date, end_date)
-                df = pd.DataFrame(index=df_cp.index.join(df_tb.index, how='inner'))
-                df['SPREAD'] = df_cp['CPN3M'] - df_tb['DTB3']
+                df_cp = get_fred('CPN3M')
+                df_tb = get_fred('DTB3')
+                df = df_cp.join(df_tb, how='outer').ffill()
+                df['SPREAD'] = df['CPN3M'] - df['DTB3']
                 return df[['SPREAD']].dropna()
                 
             if ticker == "CORP_10Y_SPREAD":
-                df_corp = web.DataReader('HQMCB10YR', 'fred', start_date, end_date).ffill()
-                df_tsy = web.DataReader('DGS10', 'fred', start_date, end_date).ffill()
-                df = pd.DataFrame(index=df_corp.index.join(df_tsy.index, how='inner'))
-                df['SPREAD'] = df_corp['HQMCB10YR'] - df_tsy['DGS10']
+                df_corp = get_fred('HQMCB10YR')
+                df_tsy = get_fred('DGS10')
+                df = df_corp.join(df_tsy, how='outer').ffill()
+                df['SPREAD'] = df['HQMCB10YR'] - df['DGS10']
                 return df[['SPREAD']].dropna()
                 
             if ticker == "BUFFETT":
-                # Market Value of Equities (Wilshire 5000 proxy) / US GDP
-                df_w = yf.download("^W5000", start=start_date, end=end_date)
-                if isinstance(df_w.columns, pd.MultiIndex):
-                    df_w.columns = df_w.columns.get_level_values(0)
-                df_w = df_w[['Close']].rename(columns={'Close': 'W5000'})
+                df_w = fetch_data("^W5000", start_date, end_date)
+                if df_w is None: return None
                 
-                df_gdp = web.DataReader('GDP', 'fred', start_date, end_date).resample('D').ffill()
+                df_gdp = get_fred('GDP').resample('D').ffill()
                 df = df_w.join(df_gdp, how='inner')
                 df['BUFFETT'] = (df['W5000'] / df['GDP']) * 100
                 return df[['BUFFETT']].dropna()
 
-            df = web.DataReader(ticker, 'fred', start_date, end_date).ffill()
+            df = get_fred(ticker).ffill()
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
             return df

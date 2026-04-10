@@ -42,7 +42,8 @@ fred = Fred(api_key=FRED_API_KEY) if Fred and FRED_API_KEY else None
 # HELPER FUNCTIONS & DATA FETCHING (BULLETPROOFED)
 # ==========================================
 
-@st.cache_data(ttl=3600)
+# Temporarily dropping ttl=3600 to force a hard cache reset
+@st.cache_data
 def fetch_data(ticker, start_date, end_date):
     """Fetches data with automatic fallback if API keys fail."""
     
@@ -132,16 +133,10 @@ def fetch_data(ticker, start_date, end_date):
             return df[['SPREAD']].dropna()
             
         if ticker == "BUFFETT":
-            # Pull Wilshire 5000 and GDP directly from FRED
-            df_w = get_fred('WILL5000PR') 
+            df_w = get_fred('WILL5000PR') # Pull Wilshire 5000 cleanly from FRED
             df_gdp = get_fred('GDP')
-            
             if df_w is not None and df_gdp is not None:
-                # Resample quarterly GDP to daily and forward fill so the join works perfectly
-                df_gdp_daily = df_gdp.resample('D').ffill()
-                # Inner join aligns trading days
-                df = df_w.join(df_gdp_daily, how='inner').dropna()
-                # Wilshire index points loosely equal Billions in market cap. GDP is in Billions.
+                df = df_w.join(df_gdp, how='outer').ffill().dropna()
                 df['BUFFETT'] = (df['WILL5000PR'] / df['GDP']) * 100
                 return df[['BUFFETT']]
             return None
@@ -149,6 +144,8 @@ def fetch_data(ticker, start_date, end_date):
         df = get_fred(ticker)
         if df is not None:
             df = df.ffill()
+            # WRESBAL (Reserves), WTREGEN (TGA), WALCL (Total Assets) are in Millions. Div by 1000 = Billions.
+            # RRPONTSYD is natively in Billions. It gets ignored here to plot cleanly on the same axis.
             if ticker in ["WRESBAL", "WTREGEN", "WALCL"]:
                 df[ticker] = df[ticker] / 1000
             return df
@@ -474,13 +471,11 @@ def render_buffett_indicator():
     fig = go.Figure()
     
     if df is not None and not df.empty:
-        # Calculate mathematical standard deviations dynamically
         mean_val = df['BUFFETT'].mean()
         std_val = df['BUFFETT'].std()
         
         fig.add_trace(go.Scatter(x=df.index, y=df['BUFFETT'], name="Wilshire 5000 / GDP", mode='lines', line=dict(color="#00BFFF", width=2)))
         
-        # Plot precise +1σ and +2σ mathematical bands
         fig.add_hline(y=mean_val + (2 * std_val), line_dash="dot", line_color="#FF0000", annotation_text="+2σ SEVERE OVERVALUATION")
         fig.add_hline(y=mean_val + std_val, line_dash="dash", line_color="#FFB100", annotation_text="+1σ OVERVALUED")
         fig.add_hline(y=mean_val - std_val, line_dash="dash", line_color="#FFB100", annotation_text="-1σ UNDERVALUED")
@@ -508,6 +503,10 @@ def render_sahm_rule():
 # MAIN APP & TABS
 # ==========================================
 st.title("🖥️ SYSTEMIC STRESS TERMINAL")
+
+# Check to ensure Streamlit secrets are active, warn user if not.
+if not FRED_API_KEY:
+    st.warning("⚠️ No FRED API Key found in st.secrets. Relying on pandas_datareader fallback. For max reliability, add FRED_API_KEY to your Streamlit Cloud Secrets.")
 
 tab1, tab2, tab3 = st.tabs(["🚰 1. LIQUIDITY", "⚠️ 2. CREDIT RISK", "🌍 3. MACRO REGIME & FRAGILITY"])
 

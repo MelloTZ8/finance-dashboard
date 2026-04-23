@@ -190,7 +190,7 @@ with tab1:
         render_section(section)
 
 # ==========================================
-# TAB 2: HOUSING VS RENT (DUAL AXIS GRID LOCK)
+# TAB 2: HOUSING VS RENT (DUAL AXIS GRID LOCK: LEFT 0 = RIGHT 2.5)
 # ==========================================
 with tab2:
     st.subheader("🏠 Home Price Index vs. Rent Inflation Divergence")
@@ -206,19 +206,29 @@ with tab2:
         plot_df = df_housing.loc[mask]
 
         if not plot_df.empty:
-            # Symmetrical zero-locking calculation
             l_max_val, l_min_val = plot_df['Case-Shiller'].max(), plot_df['Case-Shiller'].min()
             r_max_val, r_min_val = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max(), plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].min().min()
             
-            # Find the max steps required in positive and negative directions
-            steps_above = max(int(np.ceil(l_max_val / 8.0)), int(np.ceil(r_max_val / 2.5)))
-            steps_below = max(int(np.ceil(abs(l_min_val) / 8.0)), int(np.ceil(abs(r_min_val) / 2.5)))
+            # Find max steps ABOVE the baselines (Left: 0, Right: 2.5)
+            steps_above = max(
+                0,
+                int(np.ceil((l_max_val - 0) / 8.0)), 
+                int(np.ceil((r_max_val - 2.5) / 2.5))
+            )
             
-            y1_max = steps_above * 8
-            y1_min = -steps_below * 8
+            # Find max steps BELOW the baselines (Left: 0, Right: 2.5)
+            steps_below = max(
+                0,
+                int(np.ceil((0 - l_min_val) / 8.0)), 
+                int(np.ceil((2.5 - r_min_val) / 2.5))
+            )
             
-            y2_max = steps_above * 2.5
-            y2_min = -steps_below * 2.5
+            # Calculate absolute min and max for the axes
+            y1_max = 0 + (steps_above * 8)
+            y1_min = 0 - (steps_below * 8)
+            
+            y2_max = 2.5 + (steps_above * 2.5)
+            y2_min = 2.5 - (steps_below * 2.5)
 
             fig_house = make_subplots(specs=[[{"secondary_y": True}]])
             fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="Home Price (L)", marker=dict(color='rgba(0,191,255,0.6)')), secondary_y=False)
@@ -245,7 +255,7 @@ with tab2:
                 yaxis2=dict(
                     title="YoY % Change (Rent / OER)",
                     range=[y2_min, y2_max],
-                    tick0=0,
+                    tick0=2.5,
                     dtick=2.5,
                     showgrid=False, # Grid disabled on right axis to prevent double-line bleed
                     overlaying='y',

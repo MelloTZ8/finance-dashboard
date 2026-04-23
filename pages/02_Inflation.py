@@ -8,7 +8,6 @@ from dateutil.relativedelta import relativedelta
 import requests
 
 # --- IMPORT CUSTOM THEME ---
-# Adjust the import statement if your theme.py is in a subfolder
 from theme import inject_custom_css 
 
 # --- PAGE CONFIG & THEME INJECTION ---
@@ -50,8 +49,14 @@ def fetch_inflation_data():
     all_data['Headline Index'] = fetch_fred_series('CPIAUCSL', start_date)
     for name, s_id in FRED_SERIES.items(): all_data[name] = fetch_fred_series(s_id, start_date, units='pc1')
     for name, s_id in FRED_NATIVE_PERCENT.items(): all_data[name] = fetch_fred_series(s_id, start_date) 
+    
     df_final = pd.DataFrame(all_data)
+    
+    # Isolate monthly data, resample, ffill, and DROP the redundant trailing month
+    # caused by the daily data (5Y Breakeven) extending the index to today.
     df_monthly = df_final.drop(columns=['5Y Breakeven']).resample('MS').first().ffill()
+    df_monthly = df_monthly.iloc[:-1] 
+    
     df_daily = df_final[['5Y Breakeven']].ffill().dropna()
     return df_monthly, df_daily
 
@@ -68,6 +73,7 @@ def fetch_wages_and_sentiment():
     df_wages = pd.DataFrame()
     for name, s_id in FRED_WAGES_SERIES.items(): df_wages[name] = fetch_fred_series(s_id, start_date_wages, units='pc1')
     df_wages = df_wages.resample('MS').first().ffill()
+    
     start_date_sent = '1960-01-01'
     df_sentiment = pd.DataFrame()
     df_sentiment['UMCSENT'] = fetch_fred_series('UMCSENT', start_date_sent) 
@@ -200,16 +206,19 @@ with tab2:
         plot_df = df_housing.loc[mask]
 
         if not plot_df.empty:
-            # Mathematical Alignment for Dual Axes (L: 0 to N*8 | R: 2.5 to 2.5 + N*2.5)
-            l_max_val = plot_df['Case-Shiller'].max()
-            r_max_val = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max()
+            # Symmetrical zero-locking calculation
+            l_max_val, l_min_val = plot_df['Case-Shiller'].max(), plot_df['Case-Shiller'].min()
+            r_max_val, r_min_val = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max(), plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].min().min()
             
-            n_left = int(np.ceil((l_max_val - 0) / 8.0))
-            n_right = int(np.ceil((r_max_val - 2.5) / 2.5))
-            n_steps = max(n_left, n_right)
+            # Find the max steps required in positive and negative directions
+            steps_above = max(int(np.ceil(l_max_val / 8.0)), int(np.ceil(r_max_val / 2.5)))
+            steps_below = max(int(np.ceil(abs(l_min_val) / 8.0)), int(np.ceil(abs(r_min_val) / 2.5)))
             
-            y1_max = 0 + (n_steps * 8)
-            y2_max = 2.5 + (n_steps * 2.5)
+            y1_max = steps_above * 8
+            y1_min = -steps_below * 8
+            
+            y2_max = steps_above * 2.5
+            y2_min = -steps_below * 2.5
 
             fig_house = make_subplots(specs=[[{"secondary_y": True}]])
             fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="Home Price (L)", marker=dict(color='rgba(0,191,255,0.6)')), secondary_y=False)
@@ -223,22 +232,25 @@ with tab2:
             fig_house.update_layout(
                 height=600,
                 yaxis=dict(
-                    range=[0, y1_max],
+                    range=[y1_min, y1_max],
                     tick0=0,
                     dtick=8,
                     showgrid=True,
                     gridcolor='#333333',
                     gridwidth=1,
-                    griddash='dot'
+                    griddash='dot',
+                    zeroline=True,
+                    zerolinecolor='#555555'
                 ),
                 yaxis2=dict(
                     title="YoY % Change (Rent / OER)",
-                    range=[2.5, y2_max],
-                    tick0=2.5,
+                    range=[y2_min, y2_max],
+                    tick0=0,
                     dtick=2.5,
-                    showgrid=False, # Grid disabled on right axis to prevent double-line jank
+                    showgrid=False, # Grid disabled on right axis to prevent double-line bleed
                     overlaying='y',
-                    side='right'
+                    side='right',
+                    zeroline=False
                 )
             )
             st.plotly_chart(fig_house, use_container_width=True)
@@ -265,7 +277,7 @@ with tab3:
         render_expert_note('Wages')
 
 # ==========================================
-# TAB 4: CONSUMER SENTIMENT (DUAL ENDED SLIDER)
+# TAB 4: CONSUMER SENTIMENT (DUAL ENDED SLIDER & MAXIMIZED AXIS)
 # ==========================================
 with tab4:
     if not df_sentiment.empty:
@@ -290,6 +302,14 @@ with tab4:
         fig_s1.add_trace(go.Scatter(x=plot_sent.index, y=plot_sent['UMCSENT'], mode='lines', line=dict(color='#00BFFF', width=2), fill='tozeroy', name="Sentiment Index"))
         
         fig_s1 = apply_bb_theme(fig_s1, x_title="Date", y_title="Index Value")
+        
+        # Maximize vertical space based on selected data window
+        if not plot_sent.empty:
+            s_min = plot_sent['UMCSENT'].min()
+            s_max = plot_sent['UMCSENT'].max()
+            padding = (s_max - s_min) * 0.05 # 5% visual padding
+            fig_s1.update_layout(yaxis=dict(range=[s_min - padding, s_max + padding]))
+            
         fig_s1.update_layout(height=450)
         st.plotly_chart(fig_s1, use_container_width=True)
         render_expert_note('Sentiment')

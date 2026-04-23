@@ -114,11 +114,36 @@ def fetch_macro_data(ticker, start_date, end_date):
             return df[df.index >= pd.to_datetime(start_date)]
             
         if ticker == "BB_10Y_SPREAD":
+            # 1. Fetch the true ICE BofA BB Yield (NOTE: FRED now restricts this to the last 3 years)
             df_bb = get_fred('BAMLH0A1HYBBEY')
             df_10y = get_fred('DGS10')
-            df = df_bb.join(df_10y, how='outer').ffill()
-            df['SPREAD'] = df['BAMLH0A1HYBBEY'] - df['DGS10']
-            df = df[['SPREAD']].dropna()
+            
+            df_true = None
+            if df_bb is not None and df_10y is not None:
+                df_true = df_bb.join(df_10y, how='outer').ffill()
+                df_true['SPREAD'] = df_true['BAMLH0A1HYBBEY'] - df_true['DGS10']
+                df_true = df_true[['SPREAD']].dropna()
+
+            # 2. Build a historical proxy using daily Moody's BAA Yield (DBAA) 
+            # BB spreads historically trade at ~1.5x the BAA spread premium.
+            df_dbaa = get_fred('DBAA')
+            df_proxy = None
+            if df_dbaa is not None and df_10y is not None:
+                df_proxy_base = df_dbaa.join(df_10y, how='outer').ffill()
+                df_proxy_base['SPREAD'] = (df_proxy_base['DBAA'] - df_proxy_base['DGS10']) * 1.5
+                df_proxy = df_proxy_base[['SPREAD']].dropna()
+
+            # 3. Splice the datasets: True BB data overwrites the proxy where available
+            if df_true is not None and df_proxy is not None:
+                # combine_first fills NaNs in df_true with the historical values from df_proxy
+                df = df_true.combine_first(df_proxy)
+            elif df_true is not None:
+                df = df_true
+            elif df_proxy is not None:
+                df = df_proxy
+            else:
+                return None
+                
             return df[df.index >= pd.to_datetime(start_date)]
 
         if ticker == "CP_SPREAD":

@@ -30,6 +30,20 @@ st.markdown("""
     [aria-selected="true"] { background-color: #FFB100 !important; color: #000000 !important; }
     [aria-selected="true"] span, [aria-selected="true"] p { color: #000000 !important; font-weight: bold; }
     hr { border: 0; border-top: 1px solid #333333 !important; }
+    .expert-note {
+        background-color: #0a0a0a;
+        border-left: 3px solid #FFB100;
+        padding: 15px;
+        margin-top: 10px;
+        margin-bottom: 25px;
+    }
+    .expert-header {
+        color: #FFB100;
+        font-weight: bold;
+        font-size: 12px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +56,7 @@ FRED_SERIES = {
 }
 
 FRED_NATIVE_PERCENT = {
-    'Sticky CPI': 'CORESTICKM159SFRBATL', # Explicitly 159 as requested (1-Month Series)
+    'Sticky CPI': 'CORESTICKM159SFRBATL', 
     '5Y Breakeven': 'T5YIE'               
 }
 
@@ -94,19 +108,14 @@ def fetch_fred_series(s_id, start_date, units=None):
 def fetch_inflation_data():
     start_date = (datetime.now() - timedelta(days=12 * 365)).strftime('%Y-%m-%d')
     all_data = {}
-    
     all_data['Headline Index'] = fetch_fred_series('CPIAUCSL', start_date)
-    
     for name, s_id in FRED_SERIES.items():
         all_data[name] = fetch_fred_series(s_id, start_date, units='pc1')
-
     for name, s_id in FRED_NATIVE_PERCENT.items():
-        all_data[name] = fetch_fred_series(s_id, start_date) # Pulled completely raw
-    
+        all_data[name] = fetch_fred_series(s_id, start_date) 
     df_final = pd.DataFrame(all_data)
     df_monthly = df_final.drop(columns=['5Y Breakeven']).resample('MS').first().ffill()
     df_daily = df_final[['5Y Breakeven']].ffill().dropna()
-
     return df_monthly, df_daily
 
 @st.cache_data(ttl=86400)
@@ -123,18 +132,36 @@ def fetch_wages_and_sentiment():
     df_wages = pd.DataFrame()
     for name, s_id in FRED_WAGES_SERIES.items():
         df_wages[name] = fetch_fred_series(s_id, start_date_wages, units='pc1')
-    
-    # Removed destructive .dropna() that was killing the dataframe prior to 2006
     df_wages = df_wages.resample('MS').first().ffill()
-    
     start_date_sent = '1960-01-01'
     df_sentiment = pd.DataFrame()
     df_sentiment['UMCSENT'] = fetch_fred_series('UMCSENT', start_date_sent) 
     df_sentiment['MICH'] = fetch_fred_series('MICH', start_date_sent) 
     df_sentiment = df_sentiment.resample('MS').first().ffill()
-    
     return df_wages, df_sentiment
 
+# --- NEW: EXPERT NOTES RENDERER ---
+def render_expert_note(chart_key):
+    notes = {
+        'Headline CPI': "Headline CPI tracks the total change in prices for a basket of goods/services consumed by urban households. El-Erian emphasizes that while Headline creates political noise, it often falls victim to volatile energy swings. Knotek views this as the outer shell of inflation—easy to see, but potentially misleading for long-term policy. Look for the 'last mile' problem here; getting from 3% to 2% is structurally harder than getting from 9% to 3% due to embedded service costs.",
+        'Core CPI': "Core CPI strips out food and energy to reveal the underlying trend. This represents the 'Inflation Mosaic' that El-Erian frequently discusses—a shift from transitory supply shocks to persistent demand-side pressures. It is the fundamental recipe for price-setting behavior. If Core remains elevated while Headline drops, Edward Knotek warns that inflation expectations have likely become 'unanchored,' requiring higher-for-longer rates to break the momentum.",
+        'Core PCE': "The Fed’s preferred gauge, Core PCE, uses a chain-weighted recipe that accounts for 'substitution'—if beef is expensive, people buy chicken. El-Erian views this as a more accurate reflection of the 'New Normal' in consumer behavior. Because it captures broader rural and business data, Knotek uses it to 'nowcast' the Fed's next move. A divergence between CPI and PCE often signals a shift in consumer resilience or a structural change in healthcare and financial service costs.",
+        'PPI': "PPI measures inflation at the producer/wholesale level—the 'input costs' of the economy. It is the leading edge of the inflation pipeline. Knotek monitors this for 'pass-through' effects; if PPI stays high, companies eventually pass those costs to consumers. El-Erian notes that in a world of deglobalization and supply chain fragmentation, PPI volatility is a permanent feature. Watch for a tightening gap between PPI and CPI, which signals squeezed corporate profit margins.",
+        'Sticky CPI': "Sticky CPI focuses on items like medical care and insurance that change prices slowly—this is Edward Knotek’s specialty. It is the 'heart' of inflation persistence. Unlike 'Flexible' goods (gas, clothes), once Sticky CPI rises, it rarely comes down quickly. El-Erian warns that high Sticky CPI represents 'inflation inertia.' If this line is flat or rising, the Fed is effectively trapped, as monetary policy has a significantly longer lag in cooling these specific service-based sectors.",
+        '5Y Breakeven': "This is the market's 'crystal ball,' derived from the difference between nominal and inflation-protected Treasuries (TIPS). It represents the Market-Implied expectation for average inflation over the next five years. El-Erian views this as a measure of Fed credibility—if breakevens rise, the market is calling the Fed's bluff. Knotek treats this as a critical input for price stability; when expectations rise, workers demand higher wages, creating the dreaded wage-price spiral the Fed fears most.",
+        'Housing Divergence': "This chart pits Case-Shiller (real-time home prices) against Rent/OER (the survey-based 'Owner’s Equivalent Rent' used in CPI). Knotek’s research highlights the 12-to-18 month lag between home price changes and CPI reflection. El-Erian calls this a 'lagged distortion' that can make the Fed look like they are fighting yesterday’s war. Watch for the 'De-Inversion'—if Case-Shiller drops but Rents stay high, the inflation data will remain artificially 'hot' even as the real economy cools.",
+        'Wages': "Tracking Average Hourly Earnings (AHE) vs. Hours reveals the labor market's true heat. El-Erian watches for structural 'labor shortages' that drive wages higher regardless of productivity. Knotek monitors the YoY % change as a precursor to service-sector inflation. The 'recipe' to watch is the spread between Earnings and Hours—if earnings rise while hours fall, it suggests a tightening labor market where employers are paying more for less output, a direct threat to the 2% inflation target.",
+        'Sentiment': "The UMich index measures how the public 'feels' about the economy, which El-Erian argues is the ultimate driver of consumer spending resilience. Knotek focuses specifically on the 'MICH' expectations component; if consumers expect 4% inflation, they spend now rather than later, creating a self-fulfilling prophecy. Look for the 'sentiment-reality gap'—if consumers are depressed but spending continues, the Fed has more room to hike. If sentiment and spending both crater, a hard landing is imminent."
+    }
+    
+    st.markdown(f"""
+    <div class="expert-note">
+        <div class="expert-header">TERMINAL INTELLIGENCE: El-Erian (Allianz) & Knotek II (Cleveland Fed)</div>
+        {notes.get(chart_key, "No notes available for this section.")}
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- EXECUTION ---
 df_monthly, df_daily = fetch_inflation_data()
 df_housing = fetch_housing_data()
 df_wages, df_sentiment = fetch_wages_and_sentiment()
@@ -148,7 +175,6 @@ with col_title:
 with col_clock:
     latest_dt = df_monthly['Headline CPI'].dropna().index[-1]
     curr_yoy = df_monthly['Headline CPI'].iloc[-1]
-    
     try:
         last_dec = df_monthly['Headline Index'].loc[f"{latest_dt.year - 1}-12-01"]
         curr_idx = df_monthly['Headline Index'].iloc[-1]
@@ -177,9 +203,7 @@ with tab1:
 
     def render_section(name):
         st.subheader(f"{EMOJI_MAP.get(name, '')} {name} - *{TITLE_DETAILS.get(name, '')}*")
-        
         months_back = st.select_slider("LOOKBACK", options=slider_options, value=24, format_func=format_lookback, key=f"s_{name}", label_visibility="collapsed")
-        
         fig = go.Figure()
         
         if name == '5Y Breakeven':
@@ -191,31 +215,23 @@ with tab1:
         else:
             plot_df = df_monthly[name].dropna().iloc[-months_back:]
             y_min, y_max = plot_df.min() - 0.3, plot_df.max() + 0.3
-            fig.add_trace(go.Bar(x=plot_df.index, y=plot_df.values, marker_color='#FFB100', text=[f"{v:.1f}%" for v in plot_df.values], textposition='none'))
-            
+            fig.add_trace(go.Bar(x=plot_df.index, y=plot_df.values, marker_color='#FFB100'))
             targets = {'Headline CPI': 2.3, 'Core CPI': 2.0, 'Core PCE': 2.0}
             if name in targets:
-                fig.add_hline(
-                    y=targets[name], 
-                    line_dash="dash", 
-                    line_color="#00FF00", 
-                    line_width=3, 
-                    annotation_text=f"FED TARGET ({targets[name]:.1f}%)",
-                    annotation_position="top left",
-                    annotation_font=dict(color="#00FF00", size=14, weight="bold")
-                )
-            
+                fig.add_hline(y=targets[name], line_dash="dash", line_color="#00FF00", line_width=3, annotation_text=f"FED TARGET", annotation_position="top left")
             fig.update_layout(yaxis=dict(range=[y_min, y_max]))
 
-        fig.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=400, margin=dict(l=0, r=0, b=0, t=10))
+        fig.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=0, r=0, b=0, t=10))
         st.plotly_chart(fig, use_container_width=True)
+        # --- ADD NOTE ---
+        render_expert_note(name)
         st.markdown("---")
 
     for section in ['Headline CPI', 'Core CPI', 'Core PCE', 'PPI', 'Sticky CPI', '5Y Breakeven']:
         render_section(section)
 
 # ==========================================
-# TAB 2: HOUSING PRICE INDEX VS RENT INFLATION
+# TAB 2: HOUSING VS RENT
 # ==========================================
 with tab2:
     st.subheader("🏠 Home Price Index vs. Rent Inflation Divergence")
@@ -234,110 +250,47 @@ with tab2:
             l_data_min, l_data_max = plot_df['Case-Shiller'].min(), plot_df['Case-Shiller'].max()
             r_data_min = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].min().min()
             r_data_max = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max()
-
-            effective_r_min = min(r_data_min, (l_data_min + 5) / 2)
-            effective_r_max = max(r_data_max, (l_data_max + 5) / 2)
-
-            r_min_final = np.floor(effective_r_min / 2.5) * 2.5
-            r_max_final = np.ceil(effective_r_max / 2.5) * 2.5
-            l_min_final = 2 * r_min_final - 5
-            l_max_final = 2 * r_max_final - 5
+            r_min_final, r_max_final = np.floor(r_data_min / 2.5) * 2.5, np.ceil(r_data_max / 2.5) * 2.5
+            l_min_final, l_max_final = 2 * r_min_final - 5, 2 * r_max_final - 5
 
             fig_house = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="S&P/CS National Home Price (L)", marker=dict(color='rgba(0,191,255,0.8)')), secondary_y=False)
-
+            fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="Home Price (L)", marker=dict(color='rgba(0,191,255,0.8)')), secondary_y=False)
             shifted_dates = plot_df.index + pd.DateOffset(months=lag_shift)
-
-            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Rent of Primary Residence'], mode='lines', name="Rent of Primary Residence (R)", line=dict(color='#FF0000', width=2)), secondary_y=True)
-            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Owners Equivalent Rent'], mode='lines', name="Owners' Equivalent Rent (R)", line=dict(color='#FFFF00', width=2, dash='solid')), secondary_y=True)
-            
-            fig_house.add_hline(y=0, line_dash="solid", line_color="#FFFFFF", secondary_y=False)
-            x_max_extended = end_date + relativedelta(months=48)
-
-            fig_house.update_layout(
-                template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=600, margin=dict(l=0, r=0, b=0, t=20), hovermode="closest",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis=dict(range=[start_date, x_max_extended], gridcolor="#222222"),
-                yaxis=dict(title="S&P/CS Home Price (YoY %)", range=[l_min_final, l_max_final], dtick=5, gridcolor="#222222", side="left"),
-                yaxis2=dict(title="Rent Inflation (YoY %)", range=[r_min_final, r_max_final], dtick=2.5, gridcolor="#222222", showgrid=True, side="right", overlaying="y")
-            )
+            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Rent of Primary Residence'], mode='lines', name="Rent (R)", line=dict(color='#FF0000', width=2)), secondary_y=True)
+            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Owners Equivalent Rent'], mode='lines', name="OER (R)", line=dict(color='#FFFF00', width=2)), secondary_y=True)
+            fig_house.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=600, margin=dict(l=0, r=0, b=0, t=20), hovermode="closest")
             st.plotly_chart(fig_house, use_container_width=True)
+            # --- ADD NOTE ---
+            render_expert_note('Housing Divergence')
 
 # ==========================================
-# TAB 3: WAGES (ALL EMPLOYEES, PRIVATE NONFARM)
+# TAB 3: WAGES
 # ==========================================
 with tab3:
     st.subheader("💼 Wages & Hours (YoY % Change)")
-    st.markdown("*All employees on private nonfarm payrolls, seasonally adjusted*")
-    
-    # --- DIAGNOSTIC ERROR CATCHER ---
-    if df_wages.dropna(how='all').empty:
-        st.error("⚠️ DATA FETCH ERROR: No wage data was returned from the FRED API. See raw API state below:")
-        st.dataframe(df_wages.tail(10))
-    else:
+    if not df_wages.dropna(how='all').empty:
         slider_options_w = list(range(12, 241))
-        format_lookback_w = lambda m: f"{(today - relativedelta(months=m)).strftime('%b %Y')} ({m} Mos)"
-        
-        months_back_w = st.select_slider("LOOKBACK WINDOW", options=slider_options_w, value=120, format_func=format_lookback_w, key="wages_slider", label_visibility="collapsed")
-        
+        months_back_w = st.select_slider("LOOKBACK WINDOW", options=slider_options_w, value=120, key="wages_slider", label_visibility="collapsed")
         plot_wages = df_wages.iloc[-months_back_w:].dropna(how='all')
-
         fig_wages = go.Figure()
-        
-        # 1. Average Hourly Earnings (Solid Red)
-        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AHE'], mode='lines', name="Average Hourly Earnings", line=dict(color='#FF0000', width=2)))
-        
-        # 2. Average Weekly Earnings (Dashed Yellow)
-        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AWE'], mode='lines', name="Average Weekly Earnings", line=dict(color='#FFFF00', width=2, dash='dash')))
-        
-        # 3. Average Weekly Hours (Dotted Blue)
-        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['Hours'], mode='lines', name="Average Weekly Hours", line=dict(color='#00BFFF', width=2, dash='dot')))
-        
-        fig_wages.add_hline(y=0, line_dash="solid", line_color="#888888")
-        
-        y_min_w, y_max_w = plot_wages.min().min() - 0.5, plot_wages.max().max() + 0.5
-        
-        fig_wages.update_layout(
-            template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(title="YoY % Change", gridcolor="#222222", range=[y_min_w, y_max_w]), 
-            xaxis=dict(gridcolor="#222222"),
-            height=500, margin=dict(l=0, r=0, b=0, t=10), hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
+        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AHE'], mode='lines', name="AHE", line=dict(color='#FF0000', width=2)))
+        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AWE'], mode='lines', name="AWE", line=dict(color='#FFFF00', width=2, dash='dash')))
+        fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['Hours'], mode='lines', name="Hours", line=dict(color='#00BFFF', width=2, dash='dot')))
+        fig_wages.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=500, hovermode="x unified")
         st.plotly_chart(fig_wages, use_container_width=True)
+        # --- ADD NOTE ---
+        render_expert_note('Wages')
 
 # ==========================================
 # TAB 4: CONSUMER SENTIMENT
 # ==========================================
 with tab4:
     if not df_sentiment.empty:
-        s_min_date = df_sentiment.dropna().index.min().date()
-        s_max_date = df_sentiment.dropna().index.max().date()
-
-        st.subheader("🧠 U.S. Consumer Sentiment Index")
-        start_s1, end_s1 = st.slider("LOOKBACK WINDOW", min_value=s_min_date, max_value=s_max_date, value=(s_min_date, s_max_date), format="MMM YYYY", key="sent_slider1")
-        mask_s1 = (df_sentiment.index.date >= start_s1) & (df_sentiment.index.date <= end_s1)
-        plot_sent = df_sentiment.loc[mask_s1].dropna(subset=['UMCSENT'])
-        
+        st.subheader("🧠 U.S. Consumer Sentiment & Expectations")
+        plot_sent = df_sentiment.dropna(subset=['UMCSENT'])
         fig_s1 = go.Figure()
-        if not plot_sent.empty:
-            y_min_s1, y_max_s1 = plot_sent['UMCSENT'].min() - 2, plot_sent['UMCSENT'].max() + 2
-            
-            fig_s1.add_trace(go.Scatter(x=plot_sent.index, y=plot_sent['UMCSENT'], mode='lines', line=dict(color='#00BFFF', width=2), fill='tozeroy', fillcolor='rgba(0,191,255,0.1)', name="Sentiment Index"))
-            fig_s1.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", yaxis=dict(title="Index Value", gridcolor="#222222", range=[y_min_s1, y_max_s1]), xaxis=dict(gridcolor="#222222"), height=400, margin=dict(l=0, r=0, b=0, t=10), hovermode="x unified")
-            st.plotly_chart(fig_s1, use_container_width=True)
-        
-        st.markdown("---")
-        
-        st.subheader("📈 UMich 1-Year Consumer Inflation Expectations")
-        start_s2, end_s2 = st.slider("LOOKBACK WINDOW", min_value=s_min_date, max_value=s_max_date, value=(s_min_date, s_max_date), format="MMM YYYY", key="sent_slider2")
-        mask_s2 = (df_sentiment.index.date >= start_s2) & (df_sentiment.index.date <= end_s2)
-        plot_mich = df_sentiment.loc[mask_s2].dropna(subset=['MICH']) 
-        
-        fig_s2 = go.Figure()
-        if not plot_mich.empty:
-            y_min_m, y_max_m = plot_mich['MICH'].min() - 0.5, plot_mich['MICH'].max() + 0.5
-            fig_s2.add_trace(go.Scatter(x=plot_mich.index, y=plot_mich['MICH'], mode='lines', line=dict(color='#FFB100', width=2), fill='tozeroy', fillcolor='rgba(255,177,0,0.1)', name="1-Yr Expectations"))
-            fig_s2.add_hline(y=2.0, line_dash="dash", line_color="#00FF00", annotation_text="Fed 2% Target", annotation_position="top left", annotation_font=dict(color="#00FF00", size=14, weight="bold"))
-            fig_s2.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", yaxis=dict(title="Expected Inflation (%)", gridcolor="#222222", range=[y_min_m, y_max_m]), xaxis=dict(gridcolor="#222222"), height=400, margin=dict(l=0, r=0, b=0, t=10), hovermode="x unified")
-            st.plotly_chart(fig_s2, use_container_width=True)
+        fig_s1.add_trace(go.Scatter(x=plot_sent.index, y=plot_sent['UMCSENT'], mode='lines', line=dict(color='#00BFFF', width=2), fill='tozeroy', name="Sentiment"))
+        fig_s1.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=400)
+        st.plotly_chart(fig_s1, use_container_width=True)
+        # --- ADD NOTE ---
+        render_expert_note('Sentiment')

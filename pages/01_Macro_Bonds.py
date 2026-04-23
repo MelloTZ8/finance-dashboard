@@ -147,7 +147,6 @@ def render_sidebar():
     with st.sidebar:
         st.markdown("### ⚡ TERMINAL INDEX")
         st.markdown("---")
-        # --- UPDATED FILE STRUCTURE LINKS ---
         st.page_link("00_E-Terminal.py", label="[00] Home: Switchboard")
         st.page_link("pages/01_Macro_Bonds.py", label="[01] Macro Bond Watch")
         st.page_link("pages/02_Inflation.py", label="[02] Inflation")
@@ -161,7 +160,6 @@ def render_sidebar():
         st.page_link("pages/10_Energy.py", label="[10] Energy")
         st.page_link("pages/11_Positioning.py", label="[11] Positioning")
         st.page_link("pages/12_Options_Analyzer.py", label="[12] Options Analyzer")
-        # ------------------------------------
         st.markdown("---")
         st.markdown("<span style='color:#00FF00; font-size:12px;'>SYS.STAT: ONLINE</span>", unsafe_allow_html=True)
 
@@ -225,10 +223,18 @@ def main():
     # Date Controls
     min_date = df.index.min().to_pydatetime()
     max_date = df.index.max().to_pydatetime()
+    
+    # NEW: Calculate 1-year lookback default for the initial load
+    default_start = max_date - datetime.timedelta(days=365)
+    if default_start < min_date:
+        default_start = min_date
+
     start_date, end_date = st.slider(
         "Select Date Range",
-        min_value=min_date, max_value=max_date,
-        value=(min_date, max_date), format="MMM YYYY"
+        min_value=min_date, 
+        max_value=max_date,
+        value=(default_start, max_date), # Updated to default_start
+        format="MMM YYYY"
     )
 
     # State & Target Management

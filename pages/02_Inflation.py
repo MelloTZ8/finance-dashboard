@@ -7,83 +7,24 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import requests
 
-# --- INLINE BLOOMBERG THEME ---
+# --- IMPORT CUSTOM THEME ---
+# Adjust the import statement if your theme.py is in a subfolder
+from theme import inject_custom_css 
+
+# --- PAGE CONFIG & THEME INJECTION ---
 st.set_page_config(layout="wide", page_title="Inflation & Purchasing Power")
-st.markdown("""
-<style>
-    .stApp { background-color: #000000 !important; }
-    p, h1, h2, h3, h4, h5, h6, li, td, th, label, div[data-testid="stMetricValue"], .stMetric label {
-        font-family: 'Courier New', Courier, monospace !important;
-    }
-    [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li, .stDataFrame td, .stDataFrame th {
-        color: #00FF00 !important; font-size: 14px !important; line-height: 1.5 !important;
-    }
-    h1, h2, h3, h4, h5, h6, .stSubheader {
-        color: #FFB100 !important; text-transform: uppercase !important; border-bottom: 1px solid #333333; padding-bottom: 5px;
-    }
-    [data-testid="stSidebar"] { background-color: #0a0a0a !important; border-right: 1px solid #FFB100; }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] a {
-        color: #FFB100 !important; text-decoration: none !important; font-family: 'Courier New', Courier, monospace !important;
-    }
-    [data-baseweb="tab-list"] { background-color: #000000 !important; }
-    [data-baseweb="tab"] { background-color: #111111 !important; color: #FFB100 !important; border: 1px solid #333333; }
-    [aria-selected="true"] { background-color: #FFB100 !important; color: #000000 !important; }
-    [aria-selected="true"] span, [aria-selected="true"] p { color: #000000 !important; font-weight: bold; }
-    hr { border: 0; border-top: 1px solid #333333 !important; }
-    .expert-note {
-        background-color: #0a0a0a;
-        border-left: 3px solid #FFB100;
-        padding: 15px;
-        margin-top: 10px;
-        margin-bottom: 25px;
-    }
-    .expert-header {
-        color: #FFB100;
-        font-weight: bold;
-        font-size: 12px;
-        text-transform: uppercase;
-        margin-bottom: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
+inject_custom_css()
 
 # --- TICKERS & EMOJIS ---
-FRED_SERIES = {
-    'Headline CPI': 'CPIAUCSL',
-    'Core CPI': 'CPILFESL',       
-    'Core PCE': 'PCEPILFE',
-    'PPI': 'PPIFIS'
-}
-
-FRED_NATIVE_PERCENT = {
-    'Sticky CPI': 'CORESTICKM159SFRBATL', 
-    '5Y Breakeven': 'T5YIE'               
-}
-
-FRED_HOUSING_SERIES = {
-    'Rent of Primary Residence': 'CUSR0000SEHA',
-    'Owners Equivalent Rent': 'CUSR0000SEHC',
-    'Case-Shiller': 'CSUSHPISA'
-}
-
-FRED_WAGES_SERIES = {
-    'AHE': 'CES0500000003',   # Average Hourly Earnings
-    'AWE': 'CES0500000011',   # Average Weekly Earnings
-    'Hours': 'CES0500000005'  # Average Weekly Hours
-}
-
-EMOJI_MAP = {
-    'Headline CPI': '🛒', 'Core CPI': '🏷️', 'Core PCE': '🦅', 
-    'PPI': '🏭', 'Sticky CPI': '🍯', '5Y Breakeven': '🔮'
-}
-
+FRED_SERIES = {'Headline CPI': 'CPIAUCSL', 'Core CPI': 'CPILFESL', 'Core PCE': 'PCEPILFE', 'PPI': 'PPIFIS'}
+FRED_NATIVE_PERCENT = {'Sticky CPI': 'CORESTICKM159SFRBATL', '5Y Breakeven': 'T5YIE'}
+FRED_HOUSING_SERIES = {'Rent of Primary Residence': 'CUSR0000SEHA', 'Owners Equivalent Rent': 'CUSR0000SEHC', 'Case-Shiller': 'CSUSHPISA'}
+FRED_WAGES_SERIES = {'AHE': 'CES0500000003', 'AWE': 'CES0500000011', 'Hours': 'CES0500000005'}
+EMOJI_MAP = {'Headline CPI': '🛒', 'Core CPI': '🏷️', 'Core PCE': '🦅', 'PPI': '🏭', 'Sticky CPI': '🍯', '5Y Breakeven': '🔮'}
 TITLE_DETAILS = {
-    'Headline CPI': 'Consumer Price Index (All Items)',
-    'Core CPI': 'Consumer Price Index (Less Food & Energy)',
-    'Core PCE': 'Personal Consumption Expenditures (Less Food & Energy)',
-    'PPI': 'Producer Price Index (Final Demand)',
-    'Sticky CPI': 'Sticky Price Consumer Price Index (Less Food & Energy)',
-    '5Y Breakeven': 'Market-Implied Inflation Expectations'
+    'Headline CPI': 'Consumer Price Index (All Items)', 'Core CPI': 'Consumer Price Index (Less Food & Energy)',
+    'Core PCE': 'Personal Consumption Expenditures (Less Food & Energy)', 'PPI': 'Producer Price Index (Final Demand)',
+    'Sticky CPI': 'Sticky Price Consumer Price Index (Less Food & Energy)', '5Y Breakeven': 'Market-Implied Inflation Expectations'
 }
 
 # --- DATA FETCHING FUNCTIONS ---
@@ -93,26 +34,22 @@ def fetch_fred_series(s_id, start_date, units=None):
     if units: url += f"&units={units}"
     try:
         response = requests.get(url)
-        if response.status_code != 200:
-            return pd.Series(dtype=float, name=f"ERROR_{response.status_code}")
+        if response.status_code != 200: return pd.Series(dtype=float, name=f"ERROR_{response.status_code}")
         obs = response.json().get('observations', [])
         df = pd.DataFrame(obs)[['date', 'value']]
         df['value'] = pd.to_numeric(df['value'], errors='coerce')
         df.set_index('date', inplace=True)
         df.index = pd.to_datetime(df.index)
         return df['value']
-    except Exception as e:
-        return pd.Series(dtype=float, name=f"EXCEPTION_{str(e)}")
+    except Exception as e: return pd.Series(dtype=float, name=f"EXCEPTION_{str(e)}")
 
 @st.cache_data(ttl=86400)
 def fetch_inflation_data():
     start_date = (datetime.now() - timedelta(days=12 * 365)).strftime('%Y-%m-%d')
     all_data = {}
     all_data['Headline Index'] = fetch_fred_series('CPIAUCSL', start_date)
-    for name, s_id in FRED_SERIES.items():
-        all_data[name] = fetch_fred_series(s_id, start_date, units='pc1')
-    for name, s_id in FRED_NATIVE_PERCENT.items():
-        all_data[name] = fetch_fred_series(s_id, start_date) 
+    for name, s_id in FRED_SERIES.items(): all_data[name] = fetch_fred_series(s_id, start_date, units='pc1')
+    for name, s_id in FRED_NATIVE_PERCENT.items(): all_data[name] = fetch_fred_series(s_id, start_date) 
     df_final = pd.DataFrame(all_data)
     df_monthly = df_final.drop(columns=['5Y Breakeven']).resample('MS').first().ffill()
     df_daily = df_final[['5Y Breakeven']].ffill().dropna()
@@ -122,16 +59,14 @@ def fetch_inflation_data():
 def fetch_housing_data():
     start_date = (datetime.now() - timedelta(days=40 * 365)).strftime('%Y-%m-%d') 
     df_housing = pd.DataFrame()
-    for name, s_id in FRED_HOUSING_SERIES.items():
-        df_housing[name] = fetch_fred_series(s_id, start_date, units='pc1')
+    for name, s_id in FRED_HOUSING_SERIES.items(): df_housing[name] = fetch_fred_series(s_id, start_date, units='pc1')
     return df_housing.resample('MS').first().ffill()
 
 @st.cache_data(ttl=86400)
 def fetch_wages_and_sentiment():
     start_date_wages = (datetime.now() - timedelta(days=21 * 365)).strftime('%Y-%m-%d')
     df_wages = pd.DataFrame()
-    for name, s_id in FRED_WAGES_SERIES.items():
-        df_wages[name] = fetch_fred_series(s_id, start_date_wages, units='pc1')
+    for name, s_id in FRED_WAGES_SERIES.items(): df_wages[name] = fetch_fred_series(s_id, start_date_wages, units='pc1')
     df_wages = df_wages.resample('MS').first().ffill()
     start_date_sent = '1960-01-01'
     df_sentiment = pd.DataFrame()
@@ -140,7 +75,23 @@ def fetch_wages_and_sentiment():
     df_sentiment = df_sentiment.resample('MS').first().ffill()
     return df_wages, df_sentiment
 
-# --- NEW: EXPERT NOTES RENDERER ---
+# --- GLOBAL PLOTLY LAYOUT FORMATTER ---
+def apply_bb_theme(fig, x_title="Date", y_title="Value"):
+    fig.update_layout(
+        paper_bgcolor='#000000',
+        plot_bgcolor='#000000',
+        font=dict(family="'Courier New', Courier, monospace", color="#00FF00", size=12),
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+        xaxis=dict(showgrid=True, gridcolor='#333333', gridwidth=1, griddash='dot', zeroline=False),
+        yaxis=dict(showgrid=True, gridcolor='#333333', gridwidth=1, griddash='dot', zeroline=False),
+        margin=dict(l=40, r=40, t=30, b=40),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    return fig
+
+# --- EXPERT NOTES RENDERER ---
 def render_expert_note(chart_key):
     notes = {
         'Headline CPI': "Headline CPI tracks the total change in prices for a basket of goods/services consumed by urban households. El-Erian emphasizes that while Headline creates political noise, it often falls victim to volatile energy swings. Knotek views this as the outer shell of inflation—easy to see, but potentially misleading for long-term policy. Look for the 'last mile' problem here; getting from 3% to 2% is structurally harder than getting from 9% to 3% due to embedded service costs.",
@@ -157,7 +108,7 @@ def render_expert_note(chart_key):
     st.markdown(f"""
     <div class="expert-note">
         <div class="expert-header">TERMINAL INTELLIGENCE: El-Erian (Allianz) & Knotek II (Cleveland Fed)</div>
-        {notes.get(chart_key, "No notes available for this section.")}
+        <p style="margin-top: 5px;">{notes.get(chart_key, "No notes available for this section.")}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -206,7 +157,9 @@ with tab1:
         months_back = st.select_slider("LOOKBACK", options=slider_options, value=24, format_func=format_lookback, key=f"s_{name}", label_visibility="collapsed")
         fig = go.Figure()
         
+        y_title = "YoY % Change"
         if name == '5Y Breakeven':
+            y_title = "Implied Inflation %"
             plot_df = df_daily['5Y Breakeven'].iloc[-months_back*21:] 
             if not plot_df.empty:
                 y_min, y_max = plot_df.min() - 0.05, plot_df.max() + 0.05
@@ -221,9 +174,9 @@ with tab1:
                 fig.add_hline(y=targets[name], line_dash="dash", line_color="#00FF00", line_width=3, annotation_text=f"FED TARGET", annotation_position="top left")
             fig.update_layout(yaxis=dict(range=[y_min, y_max]))
 
-        fig.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=0, r=0, b=0, t=10))
+        fig = apply_bb_theme(fig, x_title="Date", y_title=y_title)
+        fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
-        # --- ADD NOTE ---
         render_expert_note(name)
         st.markdown("---")
 
@@ -231,7 +184,7 @@ with tab1:
         render_section(section)
 
 # ==========================================
-# TAB 2: HOUSING VS RENT
+# TAB 2: HOUSING VS RENT (DUAL AXIS GRID LOCK)
 # ==========================================
 with tab2:
     st.subheader("🏠 Home Price Index vs. Rent Inflation Divergence")
@@ -247,20 +200,48 @@ with tab2:
         plot_df = df_housing.loc[mask]
 
         if not plot_df.empty:
-            l_data_min, l_data_max = plot_df['Case-Shiller'].min(), plot_df['Case-Shiller'].max()
-            r_data_min = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].min().min()
-            r_data_max = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max()
-            r_min_final, r_max_final = np.floor(r_data_min / 2.5) * 2.5, np.ceil(r_data_max / 2.5) * 2.5
-            l_min_final, l_max_final = 2 * r_min_final - 5, 2 * r_max_final - 5
+            # Mathematical Alignment for Dual Axes (L: 0 to N*8 | R: 2.5 to 2.5 + N*2.5)
+            l_max_val = plot_df['Case-Shiller'].max()
+            r_max_val = plot_df[['Rent of Primary Residence', 'Owners Equivalent Rent']].max().max()
+            
+            n_left = int(np.ceil((l_max_val - 0) / 8.0))
+            n_right = int(np.ceil((r_max_val - 2.5) / 2.5))
+            n_steps = max(n_left, n_right)
+            
+            y1_max = 0 + (n_steps * 8)
+            y2_max = 2.5 + (n_steps * 2.5)
 
             fig_house = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="Home Price (L)", marker=dict(color='rgba(0,191,255,0.8)')), secondary_y=False)
+            fig_house.add_trace(go.Bar(x=plot_df.index, y=plot_df['Case-Shiller'], name="Home Price (L)", marker=dict(color='rgba(0,191,255,0.6)')), secondary_y=False)
+            
             shifted_dates = plot_df.index + pd.DateOffset(months=lag_shift)
-            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Rent of Primary Residence'], mode='lines', name="Rent (R)", line=dict(color='#FF0000', width=2)), secondary_y=True)
-            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Owners Equivalent Rent'], mode='lines', name="OER (R)", line=dict(color='#FFFF00', width=2)), secondary_y=True)
-            fig_house.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=600, margin=dict(l=0, r=0, b=0, t=20), hovermode="closest")
+            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Rent of Primary Residence'], mode='lines', name="Rent (R)", line=dict(color='#FF0000', width=3)), secondary_y=True)
+            fig_house.add_trace(go.Scatter(x=shifted_dates, y=plot_df['Owners Equivalent Rent'], mode='lines', name="OER (R)", line=dict(color='#FFFF00', width=3)), secondary_y=True)
+            
+            fig_house = apply_bb_theme(fig_house, x_title="Date", y_title="Index Value (Case-Shiller)")
+            
+            fig_house.update_layout(
+                height=600,
+                yaxis=dict(
+                    range=[0, y1_max],
+                    tick0=0,
+                    dtick=8,
+                    showgrid=True,
+                    gridcolor='#333333',
+                    gridwidth=1,
+                    griddash='dot'
+                ),
+                yaxis2=dict(
+                    title="YoY % Change (Rent / OER)",
+                    range=[2.5, y2_max],
+                    tick0=2.5,
+                    dtick=2.5,
+                    showgrid=False, # Grid disabled on right axis to prevent double-line jank
+                    overlaying='y',
+                    side='right'
+                )
+            )
             st.plotly_chart(fig_house, use_container_width=True)
-            # --- ADD NOTE ---
             render_expert_note('Housing Divergence')
 
 # ==========================================
@@ -272,25 +253,43 @@ with tab3:
         slider_options_w = list(range(12, 241))
         months_back_w = st.select_slider("LOOKBACK WINDOW", options=slider_options_w, value=120, key="wages_slider", label_visibility="collapsed")
         plot_wages = df_wages.iloc[-months_back_w:].dropna(how='all')
+        
         fig_wages = go.Figure()
         fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AHE'], mode='lines', name="AHE", line=dict(color='#FF0000', width=2)))
         fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['AWE'], mode='lines', name="AWE", line=dict(color='#FFFF00', width=2, dash='dash')))
         fig_wages.add_trace(go.Scatter(x=plot_wages.index, y=plot_wages['Hours'], mode='lines', name="Hours", line=dict(color='#00BFFF', width=2, dash='dot')))
-        fig_wages.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=500, hovermode="x unified")
+        
+        fig_wages = apply_bb_theme(fig_wages, x_title="Date", y_title="YoY % Change")
+        fig_wages.update_layout(height=500)
         st.plotly_chart(fig_wages, use_container_width=True)
-        # --- ADD NOTE ---
         render_expert_note('Wages')
 
 # ==========================================
-# TAB 4: CONSUMER SENTIMENT
+# TAB 4: CONSUMER SENTIMENT (DUAL ENDED SLIDER)
 # ==========================================
 with tab4:
     if not df_sentiment.empty:
         st.subheader("🧠 U.S. Consumer Sentiment & Expectations")
-        plot_sent = df_sentiment.dropna(subset=['UMCSENT'])
+        
+        min_date_s = df_sentiment.dropna(subset=['UMCSENT']).index.min().date()
+        max_date_s = df_sentiment.dropna(subset=['UMCSENT']).index.max().date()
+        
+        start_date_s, end_date_s = st.slider(
+            "SELECT HISTORICAL DATA RANGE",
+            min_value=min_date_s,
+            max_value=max_date_s,
+            value=(min_date_s, max_date_s),
+            format="MMM YYYY",
+            key="sentiment_slider"
+        )
+        
+        mask_s = (df_sentiment.index.date >= start_date_s) & (df_sentiment.index.date <= end_date_s)
+        plot_sent = df_sentiment.loc[mask_s].dropna(subset=['UMCSENT'])
+        
         fig_s1 = go.Figure()
-        fig_s1.add_trace(go.Scatter(x=plot_sent.index, y=plot_sent['UMCSENT'], mode='lines', line=dict(color='#00BFFF', width=2), fill='tozeroy', name="Sentiment"))
-        fig_s1.update_layout(template='plotly_dark', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=400)
+        fig_s1.add_trace(go.Scatter(x=plot_sent.index, y=plot_sent['UMCSENT'], mode='lines', line=dict(color='#00BFFF', width=2), fill='tozeroy', name="Sentiment Index"))
+        
+        fig_s1 = apply_bb_theme(fig_s1, x_title="Date", y_title="Index Value")
+        fig_s1.update_layout(height=450)
         st.plotly_chart(fig_s1, use_container_width=True)
-        # --- ADD NOTE ---
         render_expert_note('Sentiment')

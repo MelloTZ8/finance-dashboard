@@ -17,7 +17,7 @@ st.set_page_config(page_title="Energy | E-Terminal", layout="wide")
 inject_custom_css()
 
 # Initialize FRED (Ensure 'fred_api_key' is in your .streamlit/secrets.toml)
-fred = Fred(api_key=st.secrets["fred_api_key"])
+fred_api_key = "YOUR_ACTUAL_API_KEY_HERE"
 
 # --- DATA FETCHING (CACHED) ---
 @st.cache_data(ttl=3600)

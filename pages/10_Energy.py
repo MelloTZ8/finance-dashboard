@@ -32,21 +32,34 @@ def get_energy_tickers():
     data = yf.download(list(tickers.values()), period="1y")['Close']
     return data, tickers
 
-@st.cache_data(ttl=86400)
+@@st.cache_data(ttl=86400)
 def get_fred_energy():
-    # US Rig Count (HOUST is proxy if specific rig series is restricted, 
-    # but we will use Crude Production and Rig series)
+    # Updated to the official EIA tracking IDs used by FRED
     series = {
-        "Crude_Prod": "WCRVUS2",         # Weekly US Field Production of Crude
-        "NatGas_Storage": "WNGSTUSL",    # Weekly Working Gas in Underground Storage
-        "Crude_Inventories": "WCLCPS1",  # Weekly US Stocks of Crude Oil
-        "SPR": "WCSSTUS1"                # Weekly SPR Stocks
+        "Crude_Prod": "WCRFPUS2",         # Weekly US Field Production of Crude Oil
+        "NatGas_Storage": "NWGICUS2",     # Weekly Working Gas in Underground Storage
+        "Crude_Inventories": "WCESTUS1",  # Weekly US Ending Stocks of Crude Oil (Excl. SPR)
+        "SPR": "WCSSTUS1"                 # Weekly US Ending Stocks of Crude Oil in SPR
     }
+    
     df_list = []
     for name, s_id in series.items():
-        df = fred.get_series(s_id).to_frame(name)
-        df_list.append(df)
-    return pd.concat(df_list, axis=1).ffill()
+        try:
+            # Attempt to fetch the series from FRED
+            s = fred.get_series(s_id)
+            df = s.to_frame(name)
+            df_list.append(df)
+        except Exception as e:
+            # If a series fails, log it to the cloud console and append an empty DataFrame
+            # This prevents the app from crashing and preserves the UI
+            print(f"FRED API Warning: Failed to load {name} (ID: {s_id}). Error: {e}")
+            df_list.append(pd.DataFrame(columns=[name]))
+            
+    # Concatenate whatever successfully downloaded and forward-fill missing dates
+    if df_list:
+        return pd.concat(df_list, axis=1).ffill()
+    else:
+        return pd.DataFrame()
 
 # --- PREP DATA ---
 prices, ticker_map = get_energy_tickers()
